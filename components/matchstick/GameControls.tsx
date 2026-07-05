@@ -103,9 +103,9 @@ export function GameControls({
         </button>
         <button
           type="button"
-          aria-label={text.voice}
+          aria-label={listening ? text.cancelVoice : text.voice}
           aria-pressed={listening}
-          disabled={solved || locked || listening}
+          disabled={solved || (locked && !listening)}
           onClick={onVoiceAnswer}
         >
           <ActionIcon name="voice" />

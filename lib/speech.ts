@@ -73,6 +73,7 @@ function parseSymbolExpression(transcript: string): string | null {
   const normalized = transcript
     .replace(/[＋加]/g, "+")
     .replace(/[－减]/g, "-")
+    .replace(/[＝]/g, "=")
     .replace(/等于|等|equals?|equal|is/gi, "=")
     .replace(/[，,。.\s]/g, "")
     .replace(/[０-９]/g, (char) =>

@@ -1,6 +1,13 @@
 "use client";
 
-import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type PointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   createPuzzleFromExpression,
   createInitialPuzzle,
@@ -25,6 +32,11 @@ import {
   getDragHelperPoint,
   moveDragToPointer,
 } from "@/lib/drag";
+import {
+  getSelectionMessageKey,
+  shouldPreventPageZoomGesture,
+  shouldCancelSelectionFromPlaygroundClick,
+} from "@/lib/interaction";
 import {
   getSpeechRecognitionConstructor,
   parseSpokenExpression,
@@ -106,6 +118,7 @@ export function MatchstickGame() {
   const dragReturnTimer = useRef<number | null>(null);
   const applauseAudio = useRef<HTMLAudioElement | null>(null);
   const speechRecognition = useRef<SpeechRecognitionLike | null>(null);
+  const voiceCanceling = useRef(false);
 
   const text = copy[language];
   const locked = solved || (timerEnabled && timeLeft <= 0);
@@ -161,6 +174,20 @@ export function MatchstickGame() {
       return;
     }
 
+    const preventMultiTouchZoom = (event: TouchEvent) => {
+      if (shouldPreventPageZoomGesture(event.touches.length)) {
+        event.preventDefault();
+      }
+    };
+    const preventGestureZoom = (event: Event) => {
+      event.preventDefault();
+    };
+
+    window.addEventListener("touchmove", preventMultiTouchZoom, {
+      passive: false,
+    });
+    window.addEventListener("gesturestart", preventGestureZoom);
+
     const media = window.matchMedia(
       "(orientation: portrait) and (max-width: 760px)",
     );
@@ -169,7 +196,11 @@ export function MatchstickGame() {
     updatePhonePortrait();
     media.addEventListener("change", updatePhonePortrait);
 
-    return () => media.removeEventListener("change", updatePhonePortrait);
+    return () => {
+      window.removeEventListener("touchmove", preventMultiTouchZoom);
+      window.removeEventListener("gesturestart", preventGestureZoom);
+      media.removeEventListener("change", updatePhonePortrait);
+    };
   }, []);
 
   useEffect(() => {
@@ -323,6 +354,15 @@ export function MatchstickGame() {
       return;
     }
 
+    if (listening && speechRecognition.current) {
+      voiceCanceling.current = true;
+      speechRecognition.current.abort();
+      speechRecognition.current = null;
+      setListening(false);
+      setMessageKey(getSelectionMessageKey(Boolean(selected)));
+      return;
+    }
+
     const Recognition = getSpeechRecognitionConstructor();
 
     if (!Recognition) {
@@ -331,6 +371,7 @@ export function MatchstickGame() {
     }
 
     speechRecognition.current?.abort();
+    voiceCanceling.current = false;
 
     const recognition = new Recognition();
     speechRecognition.current = recognition;
@@ -367,6 +408,13 @@ export function MatchstickGame() {
         return;
       }
 
+      if (voiceCanceling.current) {
+        voiceCanceling.current = false;
+        speechRecognition.current = null;
+        setListening(false);
+        return;
+      }
+
       setListening(false);
       setMessageKey(
         event.error === "not-allowed" || event.error === "service-not-allowed"
@@ -379,6 +427,7 @@ export function MatchstickGame() {
         return;
       }
 
+      voiceCanceling.current = false;
       speechRecognition.current = null;
       setListening(false);
     };
@@ -442,6 +491,22 @@ export function MatchstickGame() {
       setSelected({ position, segment });
       setMessageKey("selectedHint");
     }
+  }
+
+  function handleEquationClick(event: MouseEvent<HTMLDivElement>) {
+    if (
+      !shouldCancelSelectionFromPlaygroundClick({
+        target: event.target,
+        currentTarget: event.currentTarget,
+        locked,
+        hasSelected: Boolean(selected),
+      })
+    ) {
+      return;
+    }
+
+    setSelected(null);
+    setMessageKey("selectHint");
   }
 
   function handleSegmentPointerDown(
@@ -684,7 +749,11 @@ export function MatchstickGame() {
               <p className="orientation-hint">{text.rotateHint}</p>
             ) : null}
 
-            <div className="equation" aria-label={displayExpression}>
+            <div
+              className="equation"
+              aria-label={displayExpression}
+              onClick={handleEquationClick}
+            >
               {displayExpression.split("").map((char, position) => (
                 <MatchstickChar
                   key={`${position}-${char}`}

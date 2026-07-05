@@ -200,9 +200,9 @@ function enumerateMovements(expression: string) {
   const movements: Movement[] = [];
 
   expression.split("").forEach((fromChar, from) => {
-    posDraggable[fromChar].forEach((fromSegment) => {
+    (posDraggable[fromChar] ?? []).forEach((fromSegment) => {
       expression.split("").forEach((toChar, to) => {
-        posDroppable[toChar].forEach((toSegment) => {
+        (posDroppable[toChar] ?? []).forEach((toSegment) => {
           const movement = { from, fromSegment, to, toSegment };
           movements.push({
             ...movement,
