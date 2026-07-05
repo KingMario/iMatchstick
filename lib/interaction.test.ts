@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   getSelectionMessageKey,
+  shouldCountPuzzleBypass,
   shouldPreventPageZoomGesture,
   shouldCancelSelectionFromPlaygroundClick,
 } from "./interaction";
@@ -64,5 +65,20 @@ describe("interaction state helpers", () => {
     assert.equal(shouldPreventPageZoomGesture(1), false);
     assert.equal(shouldPreventPageZoomGesture(2), true);
     assert.equal(shouldPreventPageZoomGesture(3), true);
+  });
+
+  it("counts bypasses only for attempted puzzles without found answers", () => {
+    assert.equal(
+      shouldCountPuzzleBypass({ attempts: 0, answersFound: 0 }),
+      false,
+    );
+    assert.equal(
+      shouldCountPuzzleBypass({ attempts: 1, answersFound: 0 }),
+      true,
+    );
+    assert.equal(
+      shouldCountPuzzleBypass({ attempts: 1, answersFound: 1 }),
+      false,
+    );
   });
 });

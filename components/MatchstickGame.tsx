@@ -34,6 +34,7 @@ import {
 } from "@/lib/drag";
 import {
   getSelectionMessageKey,
+  shouldCountPuzzleBypass,
   shouldPreventPageZoomGesture,
   shouldCancelSelectionFromPlaygroundClick,
 } from "@/lib/interaction";
@@ -271,7 +272,7 @@ export function MatchstickGame() {
   }
 
   function startNewPuzzle() {
-    if (!solved && attempts > 0) {
+    if (shouldCountPuzzleBypass({ attempts, answersFound })) {
       setStats((current) => ({
         ...current,
         streak: 0,
