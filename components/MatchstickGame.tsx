@@ -104,7 +104,6 @@ export function MatchstickGame() {
   const [displayExpression, setDisplayExpression] = useState(puzzle.expression);
   const [selected, setSelected] = useState<SelectedSegment | null>(null);
   const [messageKey, setMessageKey] = useState<MessageKey>("selectHint");
-  const [attempts, setAttempts] = useState(0);
   const [solved, setSolved] = useState(false);
   const [solvedAnswers, setSolvedAnswers] = useState<string[]>([]);
   const [timeLeft, setTimeLeft] = useState(60);
@@ -153,7 +152,6 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
-    setAttempts(0);
     setSolved(false);
     setSolvedAnswers([]);
     setTimeLeft(60);
@@ -263,7 +261,6 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
-    setAttempts(0);
     setSolved(false);
     setSolvedAnswers([]);
     setTimeLeft(60);
@@ -272,7 +269,7 @@ export function MatchstickGame() {
   }
 
   function startNewPuzzle() {
-    if (shouldCountPuzzleBypass({ attempts, answersFound })) {
+    if (shouldCountPuzzleBypass(answersFound)) {
       setStats((current) => ({
         ...current,
         streak: 0,
@@ -476,7 +473,6 @@ export function MatchstickGame() {
         position,
         segment,
       });
-      setAttempts((current) => current + 1);
 
       if (isAnswer(movedExpression, puzzle.answers)) {
         solve(movedExpression);
@@ -634,7 +630,6 @@ export function MatchstickGame() {
     };
     const movedExpression = tryMove(displayExpression, currentDrag.from, to);
     suppressNextClick.current = true;
-    setAttempts((current) => current + 1);
 
     if (isAnswer(movedExpression, puzzle.answers)) {
       solve(movedExpression);

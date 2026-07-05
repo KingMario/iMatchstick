@@ -23,9 +23,6 @@ export function shouldPreventPageZoomGesture(touchCount: number) {
   return touchCount > 1;
 }
 
-export function shouldCountPuzzleBypass(options: {
-  attempts: number;
-  answersFound: number;
-}) {
-  return options.attempts > 0 && options.answersFound === 0;
+export function shouldCountPuzzleBypass(answersFound: number) {
+  return answersFound === 0;
 }

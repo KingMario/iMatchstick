@@ -67,18 +67,8 @@ describe("interaction state helpers", () => {
     assert.equal(shouldPreventPageZoomGesture(3), true);
   });
 
-  it("counts bypasses only for attempted puzzles without found answers", () => {
-    assert.equal(
-      shouldCountPuzzleBypass({ attempts: 0, answersFound: 0 }),
-      false,
-    );
-    assert.equal(
-      shouldCountPuzzleBypass({ attempts: 1, answersFound: 0 }),
-      true,
-    );
-    assert.equal(
-      shouldCountPuzzleBypass({ attempts: 1, answersFound: 1 }),
-      false,
-    );
+  it("counts bypasses for any puzzle without found answers", () => {
+    assert.equal(shouldCountPuzzleBypass(0), true);
+    assert.equal(shouldCountPuzzleBypass(1), false);
   });
 });
