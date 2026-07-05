@@ -262,11 +262,11 @@ h1 {
 
 .match-segment.horizontal.visible,
 .equal-char span {
-  background-image: url("/matchsticks/stick_h.png");
+  background-image: url("../public/matchsticks/stick_h.png");
 }
 
 .match-segment.vertical.visible {
-  background-image: url("/matchsticks/stick_v.png");
+  background-image: url("../public/matchsticks/stick_v.png");
 }
 
 .match-segment.placeholder {
@@ -276,11 +276,11 @@ h1 {
 }
 
 .match-segment.horizontal.placeholder {
-  background-image: url("/matchsticks/empty_h.png");
+  background-image: url("../public/matchsticks/empty_h.png");
 }
 
 .match-segment.vertical.placeholder {
-  background-image: url("/matchsticks/empty_v.png");
+  background-image: url("../public/matchsticks/empty_v.png");
 }
 
 .match-segment.selected {
@@ -294,7 +294,7 @@ h1 {
   background-position: center;
   background-repeat: no-repeat;
   background-size: 100% 100%;
-  background-image: url("/matchsticks/stick_s.gif");
+  background-image: url("../public/matchsticks/stick_s.gif");
   pointer-events: none;
   transform: translate(-50%, -50%);
   -webkit-touch-callout: none;
