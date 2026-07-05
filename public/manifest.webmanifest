@@ -1,0 +1,18 @@
+{
+  "name": "巧移火柴我最棒",
+  "short_name": "巧移火柴",
+  "description": "Move exactly one matchstick to correct the equation.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f0de",
+  "theme_color": "#f5c542",
+  "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
