@@ -5,53 +5,69 @@ import {
   shouldCountPuzzleBypass,
   shouldPreventPageZoomGesture,
   shouldCancelSelectionFromPlaygroundClick,
+  shouldStartNewPuzzleFromPlaygroundDoubleClick,
 } from "./interaction";
 
 describe("interaction state helpers", () => {
-  it("cancels selection only when the playground itself is clicked", () => {
-    const playground = new EventTarget();
-    const child = new EventTarget();
-
+  it("cancels selection for non-interactive playground clicks", () => {
     assert.equal(
       shouldCancelSelectionFromPlaygroundClick({
-        target: playground,
-        currentTarget: playground,
-        locked: false,
+        isInteractiveTarget: false,
+        interactionLocked: false,
         hasSelected: true,
       }),
       true,
     );
     assert.equal(
       shouldCancelSelectionFromPlaygroundClick({
-        target: child,
-        currentTarget: playground,
-        locked: false,
+        isInteractiveTarget: true,
+        interactionLocked: false,
         hasSelected: true,
       }),
       false,
     );
   });
 
-  it("does not cancel when the game is locked or no matchstick is selected", () => {
-    const playground = new EventTarget();
-
+  it("does not cancel when interactions are locked or no matchstick is selected", () => {
     assert.equal(
       shouldCancelSelectionFromPlaygroundClick({
-        target: playground,
-        currentTarget: playground,
-        locked: true,
+        isInteractiveTarget: false,
+        interactionLocked: true,
         hasSelected: true,
       }),
       false,
     );
     assert.equal(
       shouldCancelSelectionFromPlaygroundClick({
-        target: playground,
-        currentTarget: playground,
-        locked: false,
+        isInteractiveTarget: false,
+        interactionLocked: false,
         hasSelected: false,
       }),
       false,
+    );
+  });
+
+  it("starts a new puzzle only from solved non-interactive playground double clicks", () => {
+    assert.equal(
+      shouldStartNewPuzzleFromPlaygroundDoubleClick({
+        isInteractiveTarget: false,
+        solved: false,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldStartNewPuzzleFromPlaygroundDoubleClick({
+        isInteractiveTarget: true,
+        solved: true,
+      }),
+      false,
+    );
+    assert.equal(
+      shouldStartNewPuzzleFromPlaygroundDoubleClick({
+        isInteractiveTarget: false,
+        solved: true,
+      }),
+      true,
     );
   });
 

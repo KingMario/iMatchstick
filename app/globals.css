@@ -273,6 +273,10 @@ h1 {
 }
 
 .equation {
+  --digit-width: clamp(54px, 9.5vw, 88px);
+  --match-length: calc(var(--digit-width) * 0.72);
+  --match-thickness: calc(var(--match-length) * 68 / 240);
+
   display: flex;
   min-height: clamp(158px, 28vw, 250px);
   align-items: center;
@@ -289,7 +293,7 @@ h1 {
 .match-char {
   position: relative;
   flex: 0 0 auto;
-  width: clamp(54px, 9.5vw, 88px);
+  width: var(--digit-width);
   height: clamp(106px, 18vw, 170px);
 }
 
@@ -435,15 +439,19 @@ h1 {
 }
 
 .operator-segment-0 {
-  left: 14%;
+  left: 50%;
   top: 44%;
+  width: var(--match-length);
+  height: var(--match-thickness);
+  transform: translateX(-50%);
 }
 
 .operator-segment-1 {
-  left: 39.8%;
-  top: 33.7%;
-  height: 28.8%;
-  aspect-ratio: 68 / 240;
+  left: 50%;
+  top: 50%;
+  width: var(--match-thickness);
+  height: var(--match-length);
+  transform: translate(-50%, -50%);
 }
 
 .equal-char span {

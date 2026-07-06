@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  canDropMatchstick,
   createInitialPuzzle,
   createPuzzleFromExpression,
   generatePuzzle,
@@ -47,6 +48,41 @@ describe("matchstick puzzle logic", () => {
     assert.equal(moved, "9-3=6");
   });
 
+  it("distinguishes self moves from external drops", () => {
+    assert.equal(
+      canDropMatchstick(
+        "2+1=3",
+        { position: 0, segment: 5 },
+        { position: 0, segment: 3 },
+      ),
+      true,
+    );
+    assert.equal(
+      canDropMatchstick(
+        "6+2=8",
+        { position: 0, segment: 5 },
+        { position: 2, segment: 3 },
+      ),
+      false,
+    );
+    assert.equal(
+      canDropMatchstick(
+        "3+1=4",
+        { position: 0, segment: 3 },
+        { position: 0, segment: 5 },
+      ),
+      true,
+    );
+    assert.equal(
+      canDropMatchstick(
+        "3+3=6",
+        { position: 2, segment: 3 },
+        { position: 0, segment: 5 },
+      ),
+      false,
+    );
+  });
+
   it("supports the shared 7+0=16 puzzle answer", () => {
     const puzzle = createPuzzleFromExpression("7+0=16");
 
@@ -65,7 +101,8 @@ describe("matchstick puzzle logic", () => {
       false,
     ]);
     assert.deepEqual(getDraggableSegments("9"), [0, 2, 6]);
-    assert.deepEqual(getDroppableSegments("3"), [0, 5]);
+    assert.deepEqual(getDroppableSegments("2"), []);
+    assert.deepEqual(getDroppableSegments("3"), [0]);
     assert.deepEqual(getVisibleSegments("="), []);
   });
 

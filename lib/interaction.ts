@@ -1,16 +1,22 @@
 export type SelectionMessageKey = "selectHint" | "selectedHint";
 
 export function shouldCancelSelectionFromPlaygroundClick(options: {
-  target: EventTarget | null;
-  currentTarget: EventTarget | null;
-  locked: boolean;
+  isInteractiveTarget: boolean;
+  interactionLocked: boolean;
   hasSelected: boolean;
 }) {
   return (
-    options.target === options.currentTarget &&
-    !options.locked &&
+    !options.isInteractiveTarget &&
+    !options.interactionLocked &&
     options.hasSelected
   );
+}
+
+export function shouldStartNewPuzzleFromPlaygroundDoubleClick(options: {
+  isInteractiveTarget: boolean;
+  solved: boolean;
+}) {
+  return !options.isInteractiveTarget && options.solved;
 }
 
 export function getSelectionMessageKey(

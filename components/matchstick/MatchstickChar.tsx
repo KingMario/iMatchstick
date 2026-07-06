@@ -1,7 +1,6 @@
 import { type PointerEvent } from "react";
 import {
   getDraggableSegments,
-  getDroppableSegments,
   getVisibleSegments,
   type SelectedSegment,
 } from "@/lib/matchstick";
@@ -11,8 +10,9 @@ type MatchstickCharProps = {
   position: number;
   selected: SelectedSegment | null;
   selectionActive: boolean;
-  locked: boolean;
+  interactionLocked: boolean;
   onSegmentClick: (position: number, segment: number, visible: boolean) => void;
+  canDropSegment: (position: number, segment: number) => boolean;
   onSegmentPointerDown: (
     event: PointerEvent<HTMLButtonElement>,
     position: number,
@@ -34,8 +34,9 @@ export function MatchstickChar({
   position,
   selected,
   selectionActive,
-  locked,
+  interactionLocked,
   onSegmentClick,
+  canDropSegment,
   onSegmentPointerDown,
   onSegmentPointerMove,
   onSegmentPointerUp,
@@ -62,11 +63,11 @@ export function MatchstickChar({
         const visible = Boolean(visibleSegments[segment]);
         const selectedHere =
           selected?.position === position && selected.segment === segment;
-        const droppable = getDroppableSegments(char).includes(segment);
+        const droppable = !visible && canDropSegment(position, segment);
         const draggable = getDraggableSegments(char).includes(segment);
         const orientation = getSegmentOrientation(char, segment);
         const actionable =
-          !locked &&
+          !interactionLocked &&
           ((visible && draggable) ||
             (!visible && droppable && selectionActive));
 

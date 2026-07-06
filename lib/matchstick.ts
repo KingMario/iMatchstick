@@ -52,11 +52,11 @@ const posDraggable: Record<string, number[]> = {
   "=": [],
 };
 
-const posDroppable: Record<string, number[]> = {
+const posAddable: Record<string, number[]> = {
   "0": [6],
   "1": [1],
-  "2": [3],
-  "3": [0, 5],
+  "2": [],
+  "3": [0],
   "4": [],
   "5": [2, 5],
   "6": [2],
@@ -202,7 +202,10 @@ function enumerateMovements(expression: string) {
   expression.split("").forEach((fromChar, from) => {
     (posDraggable[fromChar] ?? []).forEach((fromSegment) => {
       expression.split("").forEach((toChar, to) => {
-        (posDroppable[toChar] ?? []).forEach((toSegment) => {
+        const targetSegments =
+          from === to ? getHiddenSegments(toChar) : (posAddable[toChar] ?? []);
+
+        targetSegments.forEach((toSegment) => {
           const movement = { from, fromSegment, to, toSegment };
           movements.push({
             ...movement,
@@ -351,6 +354,16 @@ export function tryMove(
   return getMovedExpression(expression, movement);
 }
 
+export function canDropMatchstick(
+  expression: string,
+  from: SelectedSegment,
+  to: SelectedSegment,
+) {
+  const movedExpression = tryMove(expression, from, to);
+
+  return Boolean(movedExpression) && !hasInvalidLeadingZero(movedExpression);
+}
+
 export function isAnswer(expression: string, answers: string[]) {
   return answers.includes(expression);
 }
@@ -360,9 +373,17 @@ export function getDraggableSegments(char: string) {
 }
 
 export function getDroppableSegments(char: string) {
-  return posDroppable[char] ?? [];
+  return posAddable[char] ?? [];
 }
 
 export function getVisibleSegments(char: string) {
   return digitSticks[char]?.split("").map((value) => value === "1") ?? [];
+}
+
+function getHiddenSegments(char: string) {
+  return (
+    digitSticks[char]
+      ?.split("")
+      .flatMap((value, index) => (value === "0" ? [index] : [])) ?? []
+  );
 }

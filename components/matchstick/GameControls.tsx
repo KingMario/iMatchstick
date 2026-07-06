@@ -9,7 +9,7 @@ type GameControlsProps = {
   showAnswers: boolean;
   listening: boolean;
   solved: boolean;
-  locked: boolean;
+  interactionLocked: boolean;
   canUndo: boolean;
   onDifficultyChange: (lowLevel: boolean) => void;
   onTimerChange: (enabled: boolean) => void;
@@ -29,7 +29,7 @@ export function GameControls({
   showAnswers,
   listening,
   solved,
-  locked,
+  interactionLocked,
   canUndo,
   onDifficultyChange,
   onTimerChange,
@@ -105,7 +105,7 @@ export function GameControls({
           type="button"
           aria-label={listening ? text.cancelVoice : text.voice}
           aria-pressed={listening}
-          disabled={solved || (locked && !listening)}
+          disabled={solved || (interactionLocked && !listening)}
           onClick={onVoiceAnswer}
         >
           <ActionIcon name="voice" />

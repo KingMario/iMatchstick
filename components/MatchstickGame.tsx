@@ -9,11 +9,11 @@ import {
   useState,
 } from "react";
 import {
+  canDropMatchstick,
   createPuzzleFromExpression,
   createInitialPuzzle,
   generatePuzzle,
   getDraggableSegments,
-  getDroppableSegments,
   isAnswer,
   type Puzzle,
   type SelectedSegment,
@@ -37,6 +37,7 @@ import {
   shouldCountPuzzleBypass,
   shouldPreventPageZoomGesture,
   shouldCancelSelectionFromPlaygroundClick,
+  shouldStartNewPuzzleFromPlaygroundDoubleClick,
 } from "@/lib/interaction";
 import {
   getSpeechRecognitionConstructor,
@@ -121,7 +122,8 @@ export function MatchstickGame() {
   const voiceCanceling = useRef(false);
 
   const text = copy[language];
-  const locked = solved || (timerEnabled && timeLeft <= 0);
+  const timedOut = timerEnabled && timeLeft <= 0;
+  const interactionLocked = solved || timedOut;
   const canUndo = displayExpression !== puzzle.expression;
 
   const answersFound = useMemo(() => solvedAnswers.length, [solvedAnswers]);
@@ -348,7 +350,7 @@ export function MatchstickGame() {
   }
 
   function startVoiceAnswer() {
-    if (locked) {
+    if (interactionLocked) {
       return;
     }
 
@@ -450,13 +452,13 @@ export function MatchstickGame() {
       return;
     }
 
-    if (locked) {
+    if (interactionLocked) {
       return;
     }
 
     const char = displayExpression[position];
     const draggable = getDraggableSegments(char).includes(segment);
-    const droppable = getDroppableSegments(char).includes(segment);
+    const droppable = canDropSelectedMatchstick(position, segment);
 
     if (!selected && visible && draggable) {
       setSelected({ position, segment });
@@ -490,12 +492,11 @@ export function MatchstickGame() {
     }
   }
 
-  function handleEquationClick(event: MouseEvent<HTMLDivElement>) {
+  function handlePlayAreaClick(event: MouseEvent<HTMLElement>) {
     if (
       !shouldCancelSelectionFromPlaygroundClick({
-        target: event.target,
-        currentTarget: event.currentTarget,
-        locked,
+        isInteractiveTarget: isInteractiveClickTarget(event.target),
+        interactionLocked,
         hasSelected: Boolean(selected),
       })
     ) {
@@ -506,6 +507,26 @@ export function MatchstickGame() {
     setMessageKey("selectHint");
   }
 
+  function handlePlayAreaDoubleClick(event: MouseEvent<HTMLElement>) {
+    if (
+      !shouldStartNewPuzzleFromPlaygroundDoubleClick({
+        isInteractiveTarget: isInteractiveClickTarget(event.target),
+        solved,
+      })
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    startNewPuzzle();
+  }
+
+  function canDropSelectedMatchstick(position: number, segment: number) {
+    return selected
+      ? canDropMatchstick(displayExpression, selected, { position, segment })
+      : false;
+  }
+
   function handleSegmentPointerDown(
     event: PointerEvent<HTMLButtonElement>,
     position: number,
@@ -513,7 +534,7 @@ export function MatchstickGame() {
     visible: boolean,
     orientation: "horizontal" | "vertical",
   ) {
-    if (locked || !visible) {
+    if (interactionLocked || !visible) {
       return;
     }
 
@@ -728,7 +749,12 @@ export function MatchstickGame() {
 
       <section className="game-layout">
         <div className="play-column">
-          <section className="play-area" aria-label={text.puzzleLabel}>
+          <section
+            className="play-area"
+            aria-label={text.puzzleLabel}
+            onClick={handlePlayAreaClick}
+            onDoubleClick={handlePlayAreaDoubleClick}
+          >
             <div className="status-strip">
               <span>
                 {text.answersFound}: {answersFound}/{puzzle.answers.length}
@@ -745,11 +771,7 @@ export function MatchstickGame() {
               <p className="orientation-hint">{text.rotateHint}</p>
             ) : null}
 
-            <div
-              className="equation"
-              aria-label={displayExpression}
-              onClick={handleEquationClick}
-            >
+            <div className="equation" aria-label={displayExpression}>
               {displayExpression.split("").map((char, position) => (
                 <MatchstickChar
                   key={`${position}-${char}`}
@@ -757,8 +779,9 @@ export function MatchstickGame() {
                   position={position}
                   selected={selected}
                   selectionActive={selected !== null}
-                  locked={locked}
+                  interactionLocked={interactionLocked}
                   onSegmentClick={handleSegmentClick}
+                  canDropSegment={canDropSelectedMatchstick}
                   onSegmentPointerDown={handleSegmentPointerDown}
                   onSegmentPointerMove={handleSegmentPointerMove}
                   onSegmentPointerUp={handleSegmentPointerUp}
@@ -789,7 +812,7 @@ export function MatchstickGame() {
               showAnswers={showAnswers}
               listening={listening}
               solved={solved}
-              locked={locked}
+              interactionLocked={interactionLocked}
               canUndo={canUndo}
               onDifficultyChange={toggleDifficulty}
               onTimerChange={(enabled) => {
@@ -848,6 +871,17 @@ function getSharedPuzzleFromUrl() {
   }
 
   return createPuzzleFromExpression(normalizeSharedExpression(expression));
+}
+
+function isInteractiveClickTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(
+      target.closest(
+        "button, input, label, a, .match-segment, .answers, .actions, .difficulty-switch",
+      ),
+    )
+  );
 }
 
 function getPuzzleShareUrl(expression: string) {
