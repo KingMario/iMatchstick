@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
+    "generate:puzzles": "node scripts/generate-puzzle-book.mjs",
     "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/*.test.js",
     "format": "prettier --write ."
   },

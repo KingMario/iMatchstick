@@ -93,7 +93,6 @@ h1 {
   font-weight: 650;
 }
 
-.difficulty-switch,
 .language-switch {
   display: inline-grid;
   grid-template-columns: repeat(2, 1fr);
@@ -104,11 +103,6 @@ h1 {
   background: var(--surface);
 }
 
-.difficulty-switch {
-  width: 100%;
-}
-
-.difficulty-switch button,
 .language-switch button,
 .actions button {
   min-height: 42px;
@@ -120,7 +114,6 @@ h1 {
   font-weight: 850;
 }
 
-.difficulty-switch button,
 .language-switch button {
   min-width: 48px;
   border: 0;
@@ -134,17 +127,56 @@ h1 {
   font-size: 13px;
 }
 
-.difficulty-switch button {
-  font-size: 13px;
-  padding: 0 10px;
-  text-align: center;
-}
-
-.difficulty-switch button[aria-pressed="true"],
 .language-switch button[aria-pressed="true"],
 .actions button[aria-pressed="true"] {
   background: var(--ink);
   color: var(--surface);
+}
+
+.difficulty-stepper {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 6px;
+}
+
+.difficulty-stepper button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  place-items: center;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.difficulty-stepper button:disabled {
+  background: var(--border-soft);
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.difficulty-stepper span {
+  display: grid;
+  min-width: 32px;
+  place-items: center;
+  font-size: 22px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.difficulty-stepper strong {
+  min-width: auto;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .game-layout {
@@ -380,7 +412,7 @@ h1 {
 
 .match-segment:focus-visible,
 .actions button:focus-visible,
-.difficulty-switch button:focus-visible,
+.difficulty-stepper button:focus-visible,
 .language-switch button:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
@@ -477,10 +509,6 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.play-options .difficulty-switch {
-  width: auto;
 }
 
 .sound-row,

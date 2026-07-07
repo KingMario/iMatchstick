@@ -12,7 +12,6 @@ import {
   canDropMatchstick,
   createPuzzleFromExpression,
   createInitialPuzzle,
-  generatePuzzle,
   getDraggableSegments,
   isAnswer,
   type Puzzle,
@@ -45,6 +44,11 @@ import {
   type SpeechRecognitionLike,
 } from "@/lib/speech";
 import { copyText } from "@/lib/share";
+import {
+  normalizePuzzleDifficulty,
+  pickPuzzleFromBook,
+  type PuzzleDifficulty,
+} from "@/lib/puzzleBook";
 
 type Stats = {
   solved: number;
@@ -98,7 +102,7 @@ const initialPuzzle = createInitialPuzzle();
 export function MatchstickGame() {
   const [mounted, setMounted] = useState(false);
   const [language, setLanguage] = useState<Language>("zh");
-  const [lowLevel, setLowLevel] = useState(true);
+  const [difficulty, setDifficulty] = useState<PuzzleDifficulty>("level0");
   const [timerEnabled, setTimerEnabled] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [puzzle, setPuzzle] = useState<Puzzle>(initialPuzzle);
@@ -125,6 +129,9 @@ export function MatchstickGame() {
   const timedOut = timerEnabled && timeLeft <= 0;
   const interactionLocked = solved || timedOut;
   const canUndo = displayExpression !== puzzle.expression;
+  const shouldSuggestLandscape =
+    phonePortrait &&
+    ["mediumPlus", "hard", "hardPlus", "expert"].includes(difficulty);
 
   const answersFound = useMemo(() => solvedAnswers.length, [solvedAnswers]);
 
@@ -136,21 +143,30 @@ export function MatchstickGame() {
 
     const savedSettings = readJson(settingsKey, {
       language: "zh" as Language,
-      lowLevel: true,
+      difficulty: "level0" as PuzzleDifficulty,
       timerEnabled: false,
       soundEnabled: true,
     });
+    const savedDifficulty = normalizePuzzleDifficulty(savedSettings.difficulty);
 
     setLanguage(savedSettings.language);
-    setLowLevel(savedSettings.lowLevel);
+    setDifficulty(savedDifficulty);
     setTimerEnabled(savedSettings.timerEnabled);
     setSoundEnabled(savedSettings.soundEnabled);
     setStats(readJson(statsKey, initialStats));
 
-    const nextPuzzle =
-      getSharedPuzzleFromUrl() ?? generatePuzzle(savedSettings.lowLevel);
-    setPuzzle(nextPuzzle);
-    setDisplayExpression(nextPuzzle.expression);
+    const sharedPuzzle = getSharedPuzzleFromUrl();
+
+    if (sharedPuzzle) {
+      setPuzzle(sharedPuzzle);
+      setDisplayExpression(sharedPuzzle.expression);
+    } else {
+      void pickPuzzleFromBook(savedDifficulty).then((nextPuzzle) => {
+        setPuzzle(nextPuzzle);
+        setDisplayExpression(nextPuzzle.expression);
+      });
+    }
+
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
@@ -219,9 +235,9 @@ export function MatchstickGame() {
 
     window.localStorage.setItem(
       settingsKey,
-      JSON.stringify({ language, lowLevel, timerEnabled, soundEnabled }),
+      JSON.stringify({ language, difficulty, timerEnabled, soundEnabled }),
     );
-  }, [language, lowLevel, mounted, soundEnabled, timerEnabled]);
+  }, [difficulty, language, mounted, soundEnabled, timerEnabled]);
 
   useEffect(() => {
     if (
@@ -279,8 +295,10 @@ export function MatchstickGame() {
       }));
     }
 
-    resetPuzzle(generatePuzzle(lowLevel));
-    clearSharedPuzzleUrl();
+    void pickPuzzleFromBook(difficulty).then((nextPuzzle) => {
+      resetPuzzle(nextPuzzle);
+      clearSharedPuzzleUrl();
+    });
   }
 
   function undoPuzzle() {
@@ -699,13 +717,13 @@ export function MatchstickGame() {
     }, 180);
   }
 
-  function toggleDifficulty(nextLowLevel: boolean) {
-    if (nextLowLevel === lowLevel) {
+  function changeDifficulty(nextDifficulty: PuzzleDifficulty) {
+    if (nextDifficulty === difficulty) {
       return;
     }
 
-    setLowLevel(nextLowLevel);
-    resetPuzzle(generatePuzzle(nextLowLevel));
+    setDifficulty(nextDifficulty);
+    void pickPuzzleFromBook(nextDifficulty).then(resetPuzzle);
   }
 
   function setDragState(nextDrag: DragState) {
@@ -767,7 +785,7 @@ export function MatchstickGame() {
               </span>
             </div>
 
-            {!lowLevel && phonePortrait ? (
+            {shouldSuggestLandscape ? (
               <p className="orientation-hint">{text.rotateHint}</p>
             ) : null}
 
@@ -806,7 +824,7 @@ export function MatchstickGame() {
 
             <GameControls
               text={text}
-              lowLevel={lowLevel}
+              difficulty={difficulty}
               timerEnabled={timerEnabled}
               soundEnabled={soundEnabled}
               showAnswers={showAnswers}
@@ -814,7 +832,7 @@ export function MatchstickGame() {
               solved={solved}
               interactionLocked={interactionLocked}
               canUndo={canUndo}
-              onDifficultyChange={toggleDifficulty}
+              onDifficultyChange={changeDifficulty}
               onTimerChange={(enabled) => {
                 setTimerEnabled(enabled);
                 setTimeLeft(60);
@@ -878,7 +896,7 @@ function isInteractiveClickTarget(target: EventTarget | null) {
     target instanceof HTMLElement &&
     Boolean(
       target.closest(
-        "button, input, label, a, .match-segment, .answers, .actions, .difficulty-switch",
+        "button, input, label, a, .match-segment, .answers, .actions, .difficulty-stepper",
       ),
     )
   );

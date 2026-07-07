@@ -1,0 +1,114 @@
+{
+  "level0": {
+    "count": 277,
+    "minScore": -4,
+    "maxScore": 11,
+    "tags": {
+      "one_digit": 164,
+      "left_side_self_move": 188,
+      "single_answer": 243,
+      "multiple_answers": 34,
+      "multi_digit": 113,
+      "right_side_self_move": 89
+    }
+  },
+  "easiest": {
+    "count": 9589,
+    "minScore": 5,
+    "maxScore": 12,
+    "tags": {
+      "multi_digit": 9589,
+      "right_side_self_move": 9589,
+      "single_answer": 9589
+    }
+  },
+  "easy": {
+    "count": 18867,
+    "minScore": 10,
+    "maxScore": 17,
+    "tags": {
+      "multi_digit": 18867,
+      "left_side_self_move": 18867,
+      "single_answer": 18867
+    }
+  },
+  "easyPlus": {
+    "count": 64,
+    "minScore": 11,
+    "maxScore": 13,
+    "tags": {
+      "one_digit": 64,
+      "right_side_external_drop": 64,
+      "cross_equal_move": 64,
+      "single_answer": 52,
+      "multiple_answers": 12
+    }
+  },
+  "medium": {
+    "count": 6439,
+    "minScore": 5,
+    "maxScore": 21,
+    "tags": {
+      "one_digit": 44,
+      "same_left_side_move": 6439,
+      "multiple_answers": 12,
+      "single_answer": 6427,
+      "multi_digit": 6395
+    }
+  },
+  "mediumPlus": {
+    "count": 92,
+    "minScore": 7,
+    "maxScore": 9,
+    "tags": {
+      "one_digit": 92,
+      "operator_change": 92,
+      "multiple_answers": 30,
+      "single_answer": 62
+    }
+  },
+  "hard": {
+    "count": 63,
+    "minScore": 8,
+    "maxScore": 18,
+    "tags": {
+      "one_digit": 63,
+      "cross_equal_move": 63,
+      "single_answer": 56,
+      "operator_change": 25,
+      "multiple_answers": 7,
+      "right_side_external_drop": 5
+    }
+  },
+  "hardPlus": {
+    "count": 67850,
+    "minScore": 12,
+    "maxScore": 27,
+    "tags": {
+      "multi_digit": 67850,
+      "same_left_side_move": 39178,
+      "high_place_move": 67850,
+      "single_answer": 67850,
+      "right_side_external_drop": 8737,
+      "right_side_self_move": 8124,
+      "left_side_self_move": 11811
+    }
+  },
+  "expert": {
+    "count": 154703,
+    "minScore": 11,
+    "maxScore": 37,
+    "tags": {
+      "multi_digit": 154703,
+      "left_side_self_move": 11066,
+      "multiple_answers": 43845,
+      "cross_equal_move": 91873,
+      "high_place_move": 96026,
+      "single_answer": 110858,
+      "same_left_side_move": 16272,
+      "right_side_external_drop": 38564,
+      "operator_change": 50984,
+      "right_side_self_move": 126
+    }
+  }
+}

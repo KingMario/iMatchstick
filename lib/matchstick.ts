@@ -100,18 +100,29 @@ function hasInvalidLeadingZero(expression: string) {
   );
 }
 
-function hasObviousLeadingSevenResult(expression: string, lowLevel: boolean) {
-  const parsed = parseExpression(expression);
+function hasObviousLargeResult(
+  sourceExpression: string,
+  candidateExpression: string,
+) {
+  const source = parseExpression(sourceExpression);
+  const candidate = parseExpression(candidateExpression);
 
-  if (!parsed) {
+  if (!source || !candidate) {
     return false;
   }
 
-  const obviousResultLength = lowLevel ? 2 : 3;
-  return (
-    parsed.result.length === obviousResultLength &&
-    parsed.result.startsWith("7")
-  );
+  const operandLengths = [source.left.length, source.right.length];
+  const result = Number(candidate.result);
+
+  if (operandLengths.every((length) => length === 1)) {
+    return result >= 70;
+  }
+
+  if (operandLengths.every((length) => length === 2)) {
+    return result >= 700;
+  }
+
+  return false;
 }
 
 export function isValidEquation(expression: string) {
@@ -305,7 +316,7 @@ export function generatePuzzle(lowLevel: boolean): Puzzle {
       continue;
     }
 
-    if (hasObviousLeadingSevenResult(candidate.expression, lowLevel)) {
+    if (hasObviousLargeResult(validExpression, candidate.expression)) {
       continue;
     }
 

@@ -1,9 +1,10 @@
-import { type CopyText } from "./copy";
 import { ActionIcon } from "./ActionIcon";
+import { type CopyText } from "./copy";
+import { puzzleDifficulties, type PuzzleDifficulty } from "@/lib/puzzleBook";
 
 type GameControlsProps = {
   text: CopyText;
-  lowLevel: boolean;
+  difficulty: PuzzleDifficulty;
   timerEnabled: boolean;
   soundEnabled: boolean;
   showAnswers: boolean;
@@ -11,7 +12,7 @@ type GameControlsProps = {
   solved: boolean;
   interactionLocked: boolean;
   canUndo: boolean;
-  onDifficultyChange: (lowLevel: boolean) => void;
+  onDifficultyChange: (difficulty: PuzzleDifficulty) => void;
   onTimerChange: (enabled: boolean) => void;
   onSoundChange: (enabled: boolean) => void;
   onNewPuzzle: () => void;
@@ -21,9 +22,11 @@ type GameControlsProps = {
   onVoiceAnswer: () => void;
 };
 
+const difficultyIcons = ["✏️", "📄", "📘", "🧮", "🎒", "🧠", "🧑‍🎓", "🎓", "🏛️"];
+
 export function GameControls({
   text,
-  lowLevel,
+  difficulty,
   timerEnabled,
   soundEnabled,
   showAnswers,
@@ -40,25 +43,49 @@ export function GameControls({
   onSharePuzzle,
   onVoiceAnswer,
 }: GameControlsProps) {
+  const difficultyIndex = puzzleDifficulties.indexOf(difficulty);
+  const difficultyLevel = difficultyIndex;
+  const difficultyIcon =
+    difficultyIcons[difficultyIndex] ?? String(difficultyLevel);
+  const canDecreaseDifficulty = difficultyIndex > 0;
+  const canIncreaseDifficulty = difficultyIndex < puzzleDifficulties.length - 1;
+
+  function changeDifficultyBy(delta: -1 | 1) {
+    const nextDifficulty = puzzleDifficulties[difficultyIndex + delta];
+
+    if (nextDifficulty) {
+      onDifficultyChange(nextDifficulty);
+    }
+  }
+
   return (
     <div className="play-controls">
       <div className="play-options">
-        <div className="difficulty-switch" aria-label={text.difficulty}>
+        <div className="difficulty-stepper" aria-label={text.difficulty}>
+          <strong>{text.difficulty}</strong>
           <button
             type="button"
-            aria-label={text.easyLabel}
-            aria-pressed={lowLevel}
-            onClick={() => onDifficultyChange(true)}
+            aria-label={text.decreaseDifficulty}
+            disabled={!canDecreaseDifficulty}
+            onClick={() => changeDifficultyBy(-1)}
           >
-            {text.easy}
+            -
           </button>
+          <span
+            aria-label={text.difficultyValue
+              .replace("{level}", String(difficultyLevel))
+              .replace("{label}", text.difficultyLabels[difficulty])}
+            title={text.difficultyDescriptions[difficulty]}
+          >
+            {difficultyIcon}
+          </span>
           <button
             type="button"
-            aria-label={text.hardLabel}
-            aria-pressed={!lowLevel}
-            onClick={() => onDifficultyChange(false)}
+            aria-label={text.increaseDifficulty}
+            disabled={!canIncreaseDifficulty}
+            onClick={() => changeDifficultyBy(1)}
           >
-            {text.hard}
+            +
           </button>
         </div>
         <label className="check-row timer-row">
