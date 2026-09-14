@@ -1032,3 +1032,24 @@ footer a:hover {
 .settings-feedback:empty {
   display: none;
 }
+
+.update-notice {
+  position: fixed;
+  z-index: 20;
+  right: max(8px, env(safe-area-inset-right));
+  top: max(8px, env(safe-area-inset-top));
+  max-width: calc(100vw - 16px);
+  display: flex;
+  gap: 12px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+}
+
+.update-notice button {
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}

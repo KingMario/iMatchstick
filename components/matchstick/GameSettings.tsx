@@ -4,8 +4,10 @@ import { ActionIcon } from "./ActionIcon";
 import { type CopyText, type Language } from "./copy";
 import { GameOverlay } from "./GameOverlay";
 import { StatsBar } from "./StatsBar";
+import { buildId, buildSha, type usePwaUpdate } from "./usePwaUpdate";
 
 type GameSettingsProps = {
+  update: ReturnType<typeof usePwaUpdate>;
   open: boolean;
   text: CopyText;
   language: Language;
@@ -24,6 +26,7 @@ type GameSettingsProps = {
 };
 
 export function GameSettings({
+  update,
   open,
   text,
   language,
@@ -101,6 +104,32 @@ export function GameSettings({
       <p className="settings-feedback" role="status">
         {feedback}
       </p>
+      <section className="settings-section">
+        <h3>{text.version}</h3>
+        <p>
+          {buildId}
+          {buildSha ? ` · ${buildSha}` : ""}
+        </p>
+        <p role="status">{text.updateStatus[update.status]}</p>
+        <button
+          type="button"
+          className="settings-share"
+          disabled={update.status === "checking" || update.applying}
+          onClick={() => void update.check()}
+        >
+          {text.checkUpdate}
+        </button>
+        {update.status === "available" ? (
+          <button
+            type="button"
+            className="settings-share"
+            disabled={update.applying}
+            onClick={() => void update.apply()}
+          >
+            {update.applying ? text.updateApplying : text.updateReload}
+          </button>
+        ) : null}
+      </section>
       <section className="settings-section">
         <h3>{text.statistics}</h3>
         <StatsBar text={text} stats={stats} onClearStats={onClearStats} />

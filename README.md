@@ -36,7 +36,15 @@ Run unit tests with `npm test`. For browser regression tests, install Chromium w
 
 Browser tests cover initial loading, repeated new-puzzle clicks, skip counting, level changes from shared URLs, and restoring solved puzzles. While a puzzle loads, puzzle controls and the countdown are paused; statistics are updated when the replacement is displayed.
 
+After `npm run build`, run `TEST_PWA_EXPORT=1 npx playwright test tests/e2e/pwa-update.spec.ts` to exercise the exported app with a real service worker. This test runs its own temporary HTTP server and covers registration retry, foreground update checks, deferred activation, continued gameplay, bilingual update controls, explicit reload, and network failure recovery.
+
 ## Build
+
+`npm run build` exports the site and generates one Build ID for the client, `version.json`, and service-worker cache. Development displays `dev`; local production builds use `local-<timestamp>`.
+
+GitHub Actions uses the workflow run's creation date in Beijing time and its position among that day's runs, for example `20260914.01`. Failed or skipped runs can leave gaps. A retry retains its run identity with a suffix such as `20260914.01-r2`. More shows the Build ID and short commit SHA. CI requires read access to workflow run history; identity generation failures stop the build.
+
+The app checks for updates on launch and when returning to the foreground. More also provides a manual check. New service workers wait until the user chooses **Update and reload**; this ends the current puzzle. **Later** dismisses the notice, while the update remains accessible in More. Builds are compared by identity, not numeric order. The worker cache version is generated automatically; no manual cache-name bump is needed.
 
 ```bash
 npm run build

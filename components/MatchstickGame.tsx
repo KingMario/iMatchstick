@@ -15,6 +15,7 @@ import { GameOverlay } from "@/components/matchstick/GameOverlay";
 import { GameSettings } from "@/components/matchstick/GameSettings";
 import { MatchstickChar } from "@/components/matchstick/MatchstickChar";
 import { StatsBar } from "@/components/matchstick/StatsBar";
+import { usePwaUpdate } from "@/components/matchstick/usePwaUpdate";
 import { playApplause } from "@/lib/audio";
 import { readJson } from "@/lib/clientStorage";
 import {
@@ -103,6 +104,8 @@ const initialStats: Stats = { solved: 0, streak: 0, bypassed: 0 };
 const initialPuzzle = createInitialPuzzle();
 
 export function MatchstickGame() {
+  const pwaUpdate = usePwaUpdate();
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const loadingRef = useRef(false);
@@ -292,17 +295,6 @@ export function MatchstickGame() {
       }),
     );
   }, [difficulty, dragHand, language, mounted, soundEnabled, timerEnabled]);
-
-  useEffect(() => {
-    if (
-      process.env.NODE_ENV !== "production" ||
-      !("serviceWorker" in navigator)
-    ) {
-      return;
-    }
-
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (isLoading || !timerEnabled || solved || timeLeft <= 0) {
@@ -988,6 +980,7 @@ export function MatchstickGame() {
         </ol>
       </GameOverlay>
       <GameSettings
+        update={pwaUpdate}
         open={settingsOpen}
         text={text}
         language={language}
@@ -1007,6 +1000,16 @@ export function MatchstickGame() {
         onShare={sharePuzzle}
         onClearStats={clearStats}
       />
+      {pwaUpdate.status === "available" && !updateDismissed && !settingsOpen ? (
+        <aside className="update-notice" aria-label={text.updateAvailable}>
+          <button type="button" onClick={() => setSettingsOpen(true)}>
+            {text.updateAvailable}
+          </button>
+          <button type="button" onClick={() => setUpdateDismissed(true)}>
+            {text.updateLater}
+          </button>
+        </aside>
+      ) : null}
     </main>
   );
 }
