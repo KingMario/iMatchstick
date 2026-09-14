@@ -43,6 +43,14 @@ body {
   user-select: none;
 }
 
+html.is-phone-game,
+html.is-phone-game body {
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 button,
 input {
   font: inherit;
@@ -64,6 +72,17 @@ button:disabled {
   gap: 18px;
   margin: 0 auto;
   padding: 22px 0 18px;
+}
+
+.phone-layout.app-shell {
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
+  padding: max(4px, env(safe-area-inset-top))
+    max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom))
+    max(4px, env(safe-area-inset-left));
 }
 
 .top-bar {
@@ -186,32 +205,25 @@ h1 {
   align-items: start;
 }
 
-.play-area,
-.answers {
+.phone-layout .game-layout,
+.phone-layout .play-column {
+  min-height: 0;
+}
+
+.phone-layout .game-layout {
+  flex: 1 1 auto;
+  align-items: stretch;
+}
+
+.phone-layout .play-column {
+  display: flex;
+}
+
+.play-area {
   border: 2px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   box-shadow: var(--shadow);
-}
-
-.check-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 850;
-}
-
-.check-row {
-  justify-content: flex-start;
-}
-
-.check-row input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--accent);
 }
 
 .play-column {
@@ -296,14 +308,6 @@ h1 {
   color: var(--success);
 }
 
-.orientation-hint {
-  margin: -4px 0 12px;
-  color: var(--accent-strong);
-  font-size: 14px;
-  font-weight: 850;
-  text-align: center;
-}
-
 .equation {
   --digit-width: clamp(54px, 9.5vw, 88px);
   --match-length: calc(var(--digit-width) * 0.72);
@@ -320,6 +324,30 @@ h1 {
   background:
     linear-gradient(rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.16)),
     var(--surface-strong);
+}
+
+.phone-layout .equation {
+  --digit-width: min(
+    88px,
+    calc((100cqw - 24px) / var(--character-count) / 1.12),
+    40cqh
+  );
+
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  gap: calc(var(--digit-width) * 0.12);
+  padding: 12px;
+}
+
+.phone-layout .match-char {
+  width: var(--digit-width);
+  height: calc(var(--digit-width) * 1.93);
+}
+
+.phone-layout .operator-char,
+.phone-layout .equal-char {
+  width: calc(var(--digit-width) * 0.78);
 }
 
 .match-char {
@@ -486,6 +514,54 @@ h1 {
   transform: translate(-50%, -50%);
 }
 
+.equation-viewport {
+  display: flex;
+  min-width: 0;
+}
+
+.equation-viewport > .equation {
+  flex: 1;
+}
+
+.phone-layout .equation-viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  container-type: size;
+}
+
+.phone-portrait .equation {
+  --digit-width: min(
+    88px,
+    calc((100cqh - 24px) / var(--character-count) / 1.12),
+    40cqw
+  );
+
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100cqh;
+  height: 100cqw;
+  min-height: 0;
+  flex: none;
+  gap: calc(var(--digit-width) * 0.12);
+  padding: 12px;
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.phone-layout .difficulty-stepper {
+  gap: 4px;
+}
+
+.phone-layout .stats {
+  gap: 10px;
+  font-size: 12px;
+}
+
+.phone-layout footer {
+  font-size: 11px;
+}
+
 .equal-char span {
   left: 14%;
 }
@@ -509,13 +585,6 @@ h1 {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.sound-row,
-.timer-row {
-  min-height: 42px;
-  padding: 0 2px;
-  white-space: nowrap;
 }
 
 .actions {
@@ -554,23 +623,6 @@ h1 {
 .action-icon-svg {
   width: 22px;
   height: 22px;
-}
-
-.answers {
-  margin-top: 16px;
-  padding: 14px 18px;
-}
-
-.answers h2 {
-  margin: 0 0 8px;
-  font-size: 18px;
-}
-
-.answers ol {
-  margin: 0;
-  padding-left: 22px;
-  font-size: 22px;
-  font-weight: 900;
 }
 
 footer {
@@ -689,4 +741,293 @@ footer a:hover {
   .bottom-row footer {
     flex: 0 0 auto;
   }
+}
+
+/* Keep phone controls outside the equation's touch surface. */
+.phone-layout > .top-bar,
+.phone-layout > .bottom-row {
+  display: none;
+}
+
+.phone-layout .play-area {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 32px minmax(0, 1fr) 48px;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.phone-layout .status-strip {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  grid-template-columns: 30px minmax(0, 1fr) 38px;
+  gap: 4px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.phone-layout .equation-viewport {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.phone-layout .play-controls {
+  grid-row: 3;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.phone-layout .actions {
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.phone-layout .actions button,
+.phone-layout .difficulty-stepper button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.phone-layout .actions button {
+  border: 0;
+  background: transparent;
+}
+
+.phone-layout .actions button:first-child {
+  background: var(--accent);
+}
+
+.phone-portrait .play-area {
+  grid-template-columns: 48px minmax(0, 1fr) 24px;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.phone-portrait .status-strip {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 20px;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  overflow-wrap: anywhere;
+}
+
+.phone-portrait .status-strip span {
+  max-height: 100%;
+}
+
+.status-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.status-brand {
+  display: none;
+}
+
+.phone-layout .status-brand {
+  display: block;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.phone-layout:not(.phone-portrait) .status-copy {
+  flex-direction: row;
+  justify-content: center;
+  gap: 12px;
+}
+
+.phone-layout:not(.phone-portrait) .status-brand {
+  flex-shrink: 0;
+}
+
+.phone-portrait .status-copy {
+  min-height: 0;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.phone-portrait .status-strip span:nth-child(3) {
+  text-align: center;
+}
+
+.phone-portrait .play-controls {
+  grid-column: 1;
+  grid-row: 1;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.phone-portrait .equation-viewport {
+  grid-column: 2;
+  grid-row: 1 / -1;
+}
+
+.phone-portrait .difficulty-stepper,
+.phone-portrait .actions {
+  flex-direction: column;
+}
+
+.phone-portrait .difficulty-stepper span {
+  height: 32px;
+}
+
+.phone-portrait .play-options {
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.game-overlay {
+  width: min(440px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.game-overlay[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-overlay::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.overlay-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.overlay-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.overlay-close {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 28px;
+}
+
+.overlay-body {
+  min-height: 0;
+  padding: 12px 16px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.settings-row {
+  display: flex;
+  min-height: 52px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-row input {
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+}
+
+.settings-row select {
+  min-height: 44px;
+  max-width: 60%;
+  padding: 6px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.settings-share {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.settings-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.settings-section h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.settings-section hr {
+  width: 48px;
+  max-width: 100%;
+  margin: 12px 0;
+  border: 0;
+  border-top: 1px dashed var(--border-soft);
+}
+
+.settings-section p {
+  margin: 6px 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.settings-section .stats {
+  justify-content: flex-start;
+}
+
+.settings-footer {
+  margin-top: 20px;
+  justify-content: flex-start;
+}
+
+.answer-list {
+  margin: 0;
+  padding-left: 24px;
+  font-size: 24px;
+  line-height: 1.8;
+}
+
+.settings-feedback:empty {
+  display: none;
 }

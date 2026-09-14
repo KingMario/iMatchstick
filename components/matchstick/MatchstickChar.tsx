@@ -8,6 +8,7 @@ import {
 type MatchstickCharProps = {
   char: string;
   position: number;
+  rotatedClockwise: boolean;
   selected: SelectedSegment | null;
   selectionActive: boolean;
   interactionLocked: boolean;
@@ -32,6 +33,7 @@ type MatchstickCharProps = {
 export function MatchstickChar({
   char,
   position,
+  rotatedClockwise,
   selected,
   selectionActive,
   interactionLocked,
@@ -66,6 +68,10 @@ export function MatchstickChar({
         const droppable = !visible && canDropSegment(position, segment);
         const draggable = getDraggableSegments(char).includes(segment);
         const orientation = getSegmentOrientation(char, segment);
+        // Drag metrics use the screen-space bounds after the equation rotates.
+        const visualOrientation = rotatedClockwise
+          ? flipOrientation(orientation)
+          : orientation;
         const actionable =
           !interactionLocked &&
           ((visible && draggable) ||
@@ -102,7 +108,7 @@ export function MatchstickChar({
                 position,
                 segment,
                 visible,
-                orientation,
+                visualOrientation,
               )
             }
             onPointerMove={onSegmentPointerMove}
@@ -125,4 +131,8 @@ function getSegmentOrientation(char: string, segment: number) {
   return segment === 0 || segment === 2 || segment === 3 || segment === 5
     ? "vertical"
     : "horizontal";
+}
+
+function flipOrientation(orientation: "horizontal" | "vertical") {
+  return orientation === "horizontal" ? "vertical" : "horizontal";
 }

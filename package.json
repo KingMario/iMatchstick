@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
+    "test:e2e": "playwright test",
     "generate:puzzles": "node scripts/generate-puzzle-book.mjs",
     "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/*.test.js",
     "format": "prettier --write ."
@@ -16,6 +17,7 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@types/node": "^24.0.10",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

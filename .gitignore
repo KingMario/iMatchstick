@@ -1,5 +1,7 @@
 .next/
 .test-out/
+test-results/
+playwright-report/
 out/
 node_modules/
 *.tsbuildinfo

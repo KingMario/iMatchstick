@@ -29,18 +29,25 @@ export function normalizePuzzleDifficulty(value: unknown): PuzzleDifficulty {
 
 export async function pickPuzzleFromBook(
   difficulty: PuzzleDifficulty,
+  previousExpression?: string,
 ): Promise<Puzzle> {
   const pool = await loadPuzzlePool(difficulty).catch(() => []);
-  const entry = pool[Math.floor(Math.random() * pool.length)];
+  const eligible = previousExpression
+    ? pool.filter((entry) => entry.split("|", 1)[0] !== previousExpression)
+    : pool;
+  const entry = eligible[Math.floor(Math.random() * eligible.length)];
 
   if (!entry) {
-    return generatePuzzle(isLowLevelDifficulty(difficulty));
+    return generatePuzzle(isLowLevelDifficulty(difficulty), previousExpression);
   }
 
   const [expression, sourceExpression] = entry.split("|");
   const puzzle = createPuzzleFromExpression(expression, sourceExpression);
 
-  return puzzle ?? generatePuzzle(isLowLevelDifficulty(difficulty));
+  return (
+    puzzle ??
+    generatePuzzle(isLowLevelDifficulty(difficulty), previousExpression)
+  );
 }
 
 async function loadPuzzlePool(difficulty: PuzzleDifficulty) {

@@ -9,6 +9,7 @@ const dragOffsetScale = 0.65;
 const dragSnapPadding = 18;
 
 export const dragStartThreshold = 8;
+export type DragHand = "left" | "right";
 
 type SnapTarget = {
   element: HTMLElement;
@@ -25,6 +26,8 @@ type DragLike = {
 export function getDragHelperMetrics(
   rect: DOMRect,
   orientation: "horizontal" | "vertical",
+  phonePortrait = false,
+  dragHand: DragHand = "right",
 ) {
   const mainLength = orientation === "horizontal" ? rect.width : rect.height;
   const helperSize = Math.max(
@@ -34,13 +37,20 @@ export function getDragHelperMetrics(
 
   return {
     helperSize,
-    offsetX: mainLength * androidCursorOffsetRatio.x * dragOffsetScale,
-    offsetY: mainLength * androidCursorOffsetRatio.y * dragOffsetScale,
+    offsetX: phonePortrait
+      ? mainLength * 0.5
+      : mainLength *
+        androidCursorOffsetRatio.x *
+        dragOffsetScale *
+        (dragHand === "left" ? -1 : 1),
+    offsetY: phonePortrait
+      ? mainLength * 0.5 * (dragHand === "left" ? 1 : -1)
+      : mainLength * androidCursorOffsetRatio.y * dragOffsetScale,
   };
 }
 
 export function getDragHelperPoint(
-  event: PointerEvent<HTMLButtonElement>,
+  event: Pick<PointerEvent<HTMLButtonElement>, "clientX" | "clientY">,
   offsetX: number,
   offsetY: number,
 ) {
@@ -91,7 +101,7 @@ export function findSnapTarget(point: {
 
 export function moveDragToPointer<T extends DragLike>(
   current: T,
-  event: PointerEvent<HTMLButtonElement>,
+  event: Pick<PointerEvent<HTMLButtonElement>, "clientX" | "clientY">,
   returning: boolean,
   shouldSnap = false,
 ) {

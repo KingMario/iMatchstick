@@ -1,6 +1,40 @@
 export const copy = {
   zh: {
     title: "巧移火柴我最棒",
+    more: "更多",
+    loading: "正在出题…",
+    loadFailed: "出题失败，请重试。",
+    dragHand: "拖拽惯用手",
+    leftHand: "左手拖拽",
+    rightHand: "右手拖拽",
+    close: "关闭",
+    statistics: "统计",
+    instructions: "玩法",
+    levelHint:
+      "级别共 0–8 级，按数字位数和火柴移动方式划分。点击级别旁的减号或加号切换，游戏会按所选级别重新出题。切换级别不计为跳过。",
+    answerIconHint: "钥匙按钮：查看本题的可行答案。",
+    newPuzzleIconHint:
+      "新题按钮：按当前级别随机出一道新题。当前题目尚未找到任何答案时，点击新题会计为跳过。",
+    undoIconHint:
+      "回退按钮：回到原题，可以用来考别人，或继续寻找其他答案。已找到的答案记录会保留。",
+    voiceIconHint:
+      "麦克风按钮：用语音解答，请说出完整算式；再次点击可取消语音输入。",
+    answerProgressHint:
+      "答案进度显示为“已找出的答案数 / 本题可行答案总数”。例如，0/2 表示本题共有 2 个可行答案，目前已找出 0 个。",
+    dragHint: "也可拖动火柴，将小火柴移到虚线空位后松手。",
+    continueHint: "答对后可点击新题，也可双击算式背景继续。",
+    shortHints: {
+      loadFailed: "出题失败，请重试",
+      selectHint: "移动一根火柴，使得等式成立",
+      selectedHint: "点击虚线放下",
+      correct: "正确！双击背景继续",
+      wrong: "再试一次",
+      timeout: "时间到",
+      voiceListening: "正在听…",
+      voiceNoMatch: "未识别到答案",
+      voiceUnsupported: "不支持语音识别",
+      voicePermission: "请允许麦克风权限",
+    },
     subtitle: "只移动一根火柴，让等式成立。",
     newPuzzle: "新题",
     undo: "复原",
@@ -33,7 +67,6 @@ export const copy = {
       hardPlus: "多位数高位变化：数值跨度大。",
       expert: "多位数跨等号、改符号或多候选：搜索空间最大。",
     },
-    rotateHint: "较高难度建议横屏，操作空间更充足。",
     timer: "计时",
     sound: "音效",
     solved: "已答",
@@ -51,6 +84,7 @@ export const copy = {
     voiceUnsupported: "当前浏览器不支持语音识别。",
     voicePermission: "需要允许麦克风权限才能语音解题。",
     shareCopied: "题目链接已复制。",
+    shareDone: "题目已分享。",
     shareFailed: "无法复制题目链接。",
     answerTitle: "可行答案",
     voice: "语音",
@@ -63,6 +97,42 @@ export const copy = {
   },
   en: {
     title: "iMatchstick",
+    more: "More",
+    loading: "Loading puzzle…",
+    loadFailed: "Unable to load a puzzle. Please try again.",
+    dragHand: "Drag hand",
+    leftHand: "Left hand",
+    rightHand: "Right hand",
+    close: "Close",
+    statistics: "Statistics",
+    instructions: "How to play",
+    levelHint:
+      "Levels 0–8 group puzzles by digit count and how the matchstick moves. Use the minus or plus button beside the level to switch and get a puzzle at that level. Changing levels does not count as a skip.",
+    answerIconHint: "Key button: view the valid answers for this puzzle.",
+    newPuzzleIconHint:
+      "New puzzle button: generate a random puzzle at the current level. Choosing New without finding any answer to the current puzzle counts as a skip.",
+    undoIconHint:
+      "Return arrow: restore the original puzzle to challenge someone else or look for other answers. Answers already found remain recorded.",
+    voiceIconHint:
+      "Microphone button: answer by speaking the complete equation. Tap again to cancel voice input.",
+    answerProgressHint:
+      "Answer progress shows answers found / total valid answers for this puzzle. For example, 0/2 means the puzzle has 2 valid answers and you have found none yet.",
+    dragHint:
+      "You can also drag a match and release when its preview reaches a dashed slot.",
+    continueHint:
+      "After solving, choose New or double-tap the puzzle background to continue.",
+    shortHints: {
+      selectHint: "Move one matchstick to make the equation correct",
+      loadFailed: "Loading failed. Try again",
+      selectedHint: "Tap a dashed slot",
+      correct: "Correct! Double-tap to continue",
+      wrong: "Try again",
+      timeout: "Time is up",
+      voiceListening: "Listening…",
+      voiceNoMatch: "No answer recognized",
+      voiceUnsupported: "Voice unavailable",
+      voicePermission: "Allow microphone access",
+    },
     subtitle: "Move exactly one matchstick to correct the equation.",
     newPuzzle: "New",
     undo: "Undo",
@@ -99,7 +169,6 @@ export const copy = {
       expert:
         "Multi-digit cross-equals, operator change, or multiple candidates: largest search space.",
     },
-    rotateHint: "Landscape is recommended for higher difficulties.",
     timer: "Timer",
     sound: "Sound",
     solved: "Solved",
@@ -117,6 +186,7 @@ export const copy = {
     voiceUnsupported: "Speech recognition is not supported in this browser.",
     voicePermission: "Microphone permission is required for voice answers.",
     shareCopied: "Puzzle link copied.",
+    shareDone: "Puzzle shared.",
     shareFailed: "Unable to copy puzzle link.",
     answerTitle: "Valid answers",
     voice: "Voice",

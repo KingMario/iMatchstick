@@ -285,7 +285,10 @@ function randomInt(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-export function generatePuzzle(lowLevel: boolean): Puzzle {
+export function generatePuzzle(
+  lowLevel: boolean,
+  previousExpression?: string,
+): Puzzle {
   const maxOperand = lowLevel ? 9 : 99;
   const minA = lowLevel ? 1 : 10;
 
@@ -325,12 +328,15 @@ export function generatePuzzle(lowLevel: boolean): Puzzle {
       validExpression,
     );
 
-    if (puzzle) {
+    if (puzzle && puzzle.expression !== previousExpression) {
       return puzzle;
     }
   }
 
-  const fallback = createPuzzleFromExpression("9-5=6", "9-3=6");
+  const fallback =
+    previousExpression === "9-5=6"
+      ? createPuzzleFromExpression("2+1=4", "3+1=4")
+      : createPuzzleFromExpression("9-5=6", "9-3=6");
 
   if (!fallback) {
     throw new Error("Unable to generate fallback matchstick puzzle.");

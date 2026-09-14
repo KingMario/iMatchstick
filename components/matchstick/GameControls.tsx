@@ -3,44 +3,38 @@ import { type CopyText } from "./copy";
 import { puzzleDifficulties, type PuzzleDifficulty } from "@/lib/puzzleBook";
 
 type GameControlsProps = {
+  isLoading: boolean;
   text: CopyText;
   difficulty: PuzzleDifficulty;
-  timerEnabled: boolean;
-  soundEnabled: boolean;
   showAnswers: boolean;
   listening: boolean;
   solved: boolean;
   interactionLocked: boolean;
   canUndo: boolean;
   onDifficultyChange: (difficulty: PuzzleDifficulty) => void;
-  onTimerChange: (enabled: boolean) => void;
-  onSoundChange: (enabled: boolean) => void;
   onNewPuzzle: () => void;
   onUndo: () => void;
   onToggleAnswers: () => void;
-  onSharePuzzle: () => void;
+  onOpenSettings: () => void;
   onVoiceAnswer: () => void;
 };
 
 const difficultyIcons = ["✏️", "📄", "📘", "🧮", "🎒", "🧠", "🧑‍🎓", "🎓", "🏛️"];
 
 export function GameControls({
+  isLoading,
   text,
   difficulty,
-  timerEnabled,
-  soundEnabled,
   showAnswers,
   listening,
   solved,
   interactionLocked,
   canUndo,
   onDifficultyChange,
-  onTimerChange,
-  onSoundChange,
   onNewPuzzle,
   onUndo,
   onToggleAnswers,
-  onSharePuzzle,
+  onOpenSettings,
   onVoiceAnswer,
 }: GameControlsProps) {
   const difficultyIndex = puzzleDifficulties.indexOf(difficulty);
@@ -66,7 +60,7 @@ export function GameControls({
           <button
             type="button"
             aria-label={text.decreaseDifficulty}
-            disabled={!canDecreaseDifficulty}
+            disabled={isLoading || !canDecreaseDifficulty}
             onClick={() => changeDifficultyBy(-1)}
           >
             -
@@ -82,37 +76,28 @@ export function GameControls({
           <button
             type="button"
             aria-label={text.increaseDifficulty}
-            disabled={!canIncreaseDifficulty}
+            disabled={isLoading || !canIncreaseDifficulty}
             onClick={() => changeDifficultyBy(1)}
           >
             +
           </button>
         </div>
-        <label className="check-row timer-row">
-          <input
-            type="checkbox"
-            checked={timerEnabled}
-            onChange={(event) => onTimerChange(event.target.checked)}
-          />
-          <span>{text.timer}</span>
-        </label>
-        <label className="check-row sound-row">
-          <input
-            type="checkbox"
-            checked={soundEnabled}
-            onChange={(event) => onSoundChange(event.target.checked)}
-          />
-          <span>{text.sound}</span>
-        </label>
       </div>
 
       <div className="actions">
-        <button type="button" aria-label={text.newPuzzle} onClick={onNewPuzzle}>
+        <button
+          type="button"
+          aria-label={text.newPuzzle}
+          title={text.newPuzzle}
+          onClick={onNewPuzzle}
+          disabled={isLoading}
+        >
           <ActionIcon name="newPuzzle" />
         </button>
         <button
           type="button"
           aria-label={text.undo}
+          title={text.undo}
           disabled={!canUndo}
           onClick={onUndo}
         >
@@ -121,21 +106,33 @@ export function GameControls({
         <button
           type="button"
           aria-label={showAnswers ? text.hideAnswer : text.answer}
+          title={text.answer}
+          aria-haspopup="dialog"
           onClick={onToggleAnswers}
+          disabled={isLoading}
         >
           <ActionIcon name={showAnswers ? "hideAnswer" : "answer"} />
-        </button>
-        <button type="button" aria-label={text.share} onClick={onSharePuzzle}>
-          <ActionIcon name="share" />
         </button>
         <button
           type="button"
           aria-label={listening ? text.cancelVoice : text.voice}
+          title={listening ? text.cancelVoice : text.voice}
           aria-pressed={listening}
           disabled={solved || (interactionLocked && !listening)}
           onClick={onVoiceAnswer}
         >
           <ActionIcon name="voice" />
+        </button>
+        <button
+          type="button"
+          aria-label={text.more}
+          title={text.more}
+          aria-haspopup="dialog"
+          onClick={onOpenSettings}
+        >
+          <span className="action-icon" aria-hidden="true">
+            ⋯
+          </span>
         </button>
       </div>
     </div>

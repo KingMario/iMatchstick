@@ -4,7 +4,7 @@ export type ActionIconName =
 const actionIcons: Record<Exclude<ActionIconName, "share">, string> = {
   answer: "🔑",
   hideAnswer: "🙈",
-  newPuzzle: "🎲",
+  newPuzzle: "🔄",
   undo: "↩️",
   voice: "🎙️",
 };

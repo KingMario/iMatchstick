@@ -1,4 +1,4 @@
-const CACHE_NAME = "imatchstick-pwa-v18";
+const CACHE_NAME = "imatchstick-pwa-v37";
 const APP_SHELL = [
   "./",
   "./manifest.webmanifest",
