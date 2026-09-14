@@ -219,8 +219,11 @@ export function MatchstickGame() {
     });
     window.addEventListener("gesturestart", preventGestureZoom);
 
+    const visualViewport = window.visualViewport;
     const updatePhoneViewport = () => {
-      const shortSide = Math.min(window.innerWidth, window.innerHeight);
+      const width = visualViewport?.width || window.innerWidth;
+      const height = visualViewport?.height || window.innerHeight;
+      const shortSide = Math.min(width, height);
       const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
       const hasMobileUserAgent = /Android|iPhone|iPod|Mobile/i.test(
         navigator.userAgent,
@@ -229,20 +232,39 @@ export function MatchstickGame() {
         shortSide <= 600 && (hasCoarsePointer || hasMobileUserAgent);
 
       setIsPhone(nextIsPhone);
-      setPhonePortrait(nextIsPhone && window.innerHeight >= window.innerWidth);
+      setPhonePortrait(nextIsPhone && height >= width);
       document.documentElement.classList.toggle("is-phone-game", nextIsPhone);
+      if (nextIsPhone) {
+        document.documentElement.style.setProperty(
+          "--game-viewport-width",
+          `${width}px`,
+        );
+        document.documentElement.style.setProperty(
+          "--game-viewport-height",
+          `${height}px`,
+        );
+      } else {
+        document.documentElement.style.removeProperty("--game-viewport-width");
+        document.documentElement.style.removeProperty("--game-viewport-height");
+      }
     };
 
     updatePhoneViewport();
     window.addEventListener("resize", updatePhoneViewport);
     window.addEventListener("orientationchange", updatePhoneViewport);
+    window.addEventListener("pageshow", updatePhoneViewport);
+    visualViewport?.addEventListener("resize", updatePhoneViewport);
 
     return () => {
       window.removeEventListener("touchmove", preventMultiTouchZoom);
       window.removeEventListener("gesturestart", preventGestureZoom);
       window.removeEventListener("resize", updatePhoneViewport);
       window.removeEventListener("orientationchange", updatePhoneViewport);
+      window.removeEventListener("pageshow", updatePhoneViewport);
+      visualViewport?.removeEventListener("resize", updatePhoneViewport);
       document.documentElement.classList.remove("is-phone-game");
+      document.documentElement.style.removeProperty("--game-viewport-width");
+      document.documentElement.style.removeProperty("--game-viewport-height");
     };
   }, []);
 
