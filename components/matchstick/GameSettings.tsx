@@ -14,6 +14,7 @@ type GameSettingsProps = {
   language: Language;
   timerEnabled: boolean;
   soundEnabled: boolean;
+  isPhone: boolean;
   dragHand: DragHand;
   onDragHandChange: (hand: DragHand) => void;
   stats: ComponentProps<typeof StatsBar>["stats"];
@@ -33,6 +34,7 @@ export function GameSettings({
   language,
   timerEnabled,
   soundEnabled,
+  isPhone,
   dragHand,
   onDragHandChange,
   stats,
@@ -70,18 +72,20 @@ export function GameSettings({
           </button>
         </div>
       </div>
-      <label className="settings-row">
-        <span>{text.dragHand}</span>
-        <select
-          value={dragHand}
-          onChange={(event) =>
-            onDragHandChange(event.target.value === "left" ? "left" : "right")
-          }
-        >
-          <option value="left">{text.leftHand}</option>
-          <option value="right">{text.rightHand}</option>
-        </select>
-      </label>
+      {isPhone && (
+        <label className="settings-row">
+          <span>{text.dragHand}</span>
+          <select
+            value={dragHand}
+            onChange={(event) =>
+              onDragHandChange(event.target.value === "left" ? "left" : "right")
+            }
+          >
+            <option value="left">{text.leftHand}</option>
+            <option value="right">{text.rightHand}</option>
+          </select>
+        </label>
+      )}
       <label className="settings-row">
         <span>{text.timer}</span>
         <input
@@ -164,10 +168,12 @@ export function GameSettings({
         <span>(c) Copyright Mario Studio 2026-2027</span>
         <a
           href="https://github.com/KingMario/iMatchstick"
+          aria-label="GitHub"
+          title="GitHub"
           target="_blank"
           rel="noreferrer"
         >
-          GitHub
+          <ActionIcon name="github" />
         </a>
       </footer>
     </GameOverlay>

@@ -66,7 +66,7 @@ export const copy = {
     statistics: "统计",
     instructions: "玩法",
     levelHint:
-      "级别共 0–8 级，按数字位数和火柴移动方式划分。点击左箭头（横屏时为上箭头）降低级别，点击右箭头（横屏时为下箭头）提升级别，游戏会按所选级别重新出题。切换级别不计为跳过。",
+      "级别共 0–8 级，按数字位数和火柴移动方式划分。横屏（或电脑浏览器屏幕）时，上箭头提升级别，下箭头降低级别；手机竖屏时，左箭头降低级别，右箭头提升级别。游戏会按所选级别重新出题，切换级别不计为跳过。",
     answerIconHint: "钥匙按钮：查看本题的可行答案。",
     newPuzzleIconHint:
       "新题按钮：按当前级别随机出一道新题。当前题目尚未找到任何答案时，点击新题会计为跳过。",
@@ -222,7 +222,7 @@ export const copy = {
     statistics: "Statistics",
     instructions: "How to play",
     levelHint:
-      "Levels 0–8 group puzzles by digit count and how the matchstick moves. Use the left arrow (up in landscape) for a lower level or the right arrow (down in landscape) for a higher level. Each change generates a puzzle at that level and does not count as a skip.",
+      "Levels 0–8 group puzzles by digit count and how the matchstick moves. In landscape (or a desktop browser window), up raises the level and down lowers it. On a phone in portrait, left lowers the level and right raises it. Each change generates a puzzle at that level and does not count as a skip.",
     answerIconHint: "Key button: view the valid answers for this puzzle.",
     newPuzzleIconHint:
       "New puzzle button: generate a random puzzle at the current level. Choosing New without finding any answer to the current puzzle counts as a skip.",

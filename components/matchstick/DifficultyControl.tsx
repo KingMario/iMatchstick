@@ -6,6 +6,7 @@ const difficultyIcons = ["✏️", "📄", "📘", "🧮", "🎒", "🧠", "🧑
 
 type Props = {
   isLoading: boolean;
+  portrait: boolean;
   text: CopyText;
   difficulty: PuzzleDifficulty;
   onDifficultyChange: (difficulty: PuzzleDifficulty) => void;
@@ -13,6 +14,7 @@ type Props = {
 
 export function DifficultyControl({
   isLoading,
+  portrait,
   text,
   difficulty,
   onDifficultyChange,
@@ -22,17 +24,32 @@ export function DifficultyControl({
     const next = puzzleDifficulties[index + delta];
     if (next) onDifficultyChange(next);
   }
+  const decrease = (
+    <button
+      key="decrease"
+      type="button"
+      aria-label={text.decreaseDifficulty}
+      disabled={isLoading || index <= 0}
+      onClick={() => changeBy(-1)}
+    >
+      <ActionIcon name="previous" />
+    </button>
+  );
+  const increase = (
+    <button
+      key="increase"
+      type="button"
+      aria-label={text.increaseDifficulty}
+      disabled={isLoading || index >= puzzleDifficulties.length - 1}
+      onClick={() => changeBy(1)}
+    >
+      <ActionIcon name="next" />
+    </button>
+  );
   return (
     <div className="difficulty-stepper" aria-label={text.difficulty}>
       <strong>{text.difficulty}</strong>
-      <button
-        type="button"
-        aria-label={text.decreaseDifficulty}
-        disabled={isLoading || index <= 0}
-        onClick={() => changeBy(-1)}
-      >
-        <ActionIcon name="previous" />
-      </button>
+      {portrait ? decrease : increase}
       <span
         aria-label={text.difficultyValue
           .replace("{level}", String(index))
@@ -41,14 +58,7 @@ export function DifficultyControl({
       >
         {difficultyIcons[index] ?? String(index)}
       </span>
-      <button
-        type="button"
-        aria-label={text.increaseDifficulty}
-        disabled={isLoading || index >= puzzleDifficulties.length - 1}
-        onClick={() => changeBy(1)}
-      >
-        <ActionIcon name="next" />
-      </button>
+      {portrait ? increase : decrease}
     </div>
   );
 }

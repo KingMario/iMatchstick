@@ -855,22 +855,6 @@ export function MatchstickGame() {
           <h1>{text.title}</h1>
           <p>{text.subtitle}</p>
         </div>
-        <div className="language-switch" aria-label={text.languageLabel}>
-          <button
-            type="button"
-            aria-pressed={language === "zh"}
-            onClick={() => setLanguage("zh")}
-          >
-            中
-          </button>
-          <button
-            type="button"
-            aria-pressed={language === "en"}
-            onClick={() => setLanguage("en")}
-          >
-            EN
-          </button>
-        </div>
       </header>
 
       <section className="game-layout">
@@ -931,6 +915,7 @@ export function MatchstickGame() {
 
             <div className="equation-viewport">
               <DifficultyControl
+                portrait={phonePortrait}
                 isLoading={isLoading}
                 text={text}
                 difficulty={difficulty}
@@ -1040,6 +1025,7 @@ export function MatchstickGame() {
         </ol>
       </GameOverlay>
       <GameSettings
+        isPhone={isPhone}
         update={pwaUpdate}
         open={settingsOpen}
         text={text}

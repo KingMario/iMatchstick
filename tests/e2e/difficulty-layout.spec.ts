@@ -26,7 +26,9 @@ for (const language of ["zh", "en"]) {
       );
       await page.goto("/");
       const level = page.locator(".equation-viewport > .difficulty-stepper");
-      await expect(level.locator("button").first()).toBeEnabled();
+      const decrease = level.locator("button:has([data-icon='previous'])");
+      const increase = level.locator("button:has([data-icon='next'])");
+      await expect(decrease).toBeEnabled();
       const box = (await level.boundingBox())!;
       const board = (await page.locator(".equation").boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(board.x);
@@ -40,8 +42,18 @@ for (const language of ["zh", "en"]) {
       );
       await expect(level.locator(".action-icon").first()).toHaveCSS(
         "transform",
-        portrait ? "none" : "matrix(0, 1, -1, 0, 0, 0)",
+        portrait ? "none" : "matrix(0, -1, 1, 0, 0, 0)",
       );
+      const lower = (await decrease.boundingBox())!;
+      const higher = (await increase.boundingBox())!;
+      const value = (await level.locator("span").boundingBox())!;
+      if (portrait) {
+        expect(lower.x + lower.width).toBeLessThanOrEqual(value.x);
+        expect(value.x + value.width).toBeLessThanOrEqual(higher.x);
+      } else {
+        expect(higher.y + higher.height).toBeLessThanOrEqual(value.y);
+        expect(value.y + value.height).toBeLessThanOrEqual(lower.y);
+      }
       await expect(level.locator("strong")).toHaveCSS(
         "writing-mode",
         portrait ? "horizontal-tb" : "vertical-rl",
@@ -109,6 +121,15 @@ for (const language of ["zh", "en"]) {
       await page.screenshot({
         path: `/tmp/imatchstick-level-${language}-${viewport.width}.png`,
       });
+      await decrease.click();
+      await expect(increase).toBeEnabled();
+      const first = portrait ? decrease : increase;
+      const second = portrait ? increase : decrease;
+      await first.focus();
+      await page.keyboard.press("Tab");
+      await expect(second).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(first).toBeFocused();
     });
   }
 }

@@ -602,7 +602,7 @@ h1 {
 }
 
 .equation-viewport > .difficulty-stepper .action-icon {
-  transform: rotate(90deg);
+  transform: rotate(-90deg);
 }
 
 .equation-viewport > .equation {
