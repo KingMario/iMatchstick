@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { LaunchScreen } from "@/components/matchstick/LaunchScreen";
 
 const MatchstickGame = dynamic(
   () =>
@@ -9,6 +10,7 @@ const MatchstickGame = dynamic(
     ),
   {
     ssr: false,
+    loading: () => <LaunchScreen />,
   },
 );
 

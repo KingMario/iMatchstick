@@ -6,8 +6,16 @@ export const metadata: Metadata = {
   description: "Move exactly one matchstick to correct the equation.",
   manifest: "./manifest.webmanifest",
   icons: {
-    icon: "./icons/icon.svg",
-    apple: "./icons/icon.svg",
+    icon: [
+      { url: "./icons/icon-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: [
+      {
+        url: "./icons/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
   },
   appleWebApp: {
     capable: true,

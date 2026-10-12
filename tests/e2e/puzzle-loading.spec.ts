@@ -31,6 +31,15 @@ test("initial loading locks the placeholder and starts the timer with the real p
   await page.clock.install();
   await page.goto("/");
   await expect(page.getByRole("status")).toHaveText("Loading puzzle…");
+  const initialDirections = await page
+    .locator(".equation .matchstick-art")
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("data-reversed")),
+    );
+  expect(initialDirections.length).toBeGreaterThan(0);
+  expect(initialDirections.every((direction) => direction === "false")).toBe(
+    true,
+  );
   await expect(page.locator(".match-segment:not(:disabled)")).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "New", exact: true }),

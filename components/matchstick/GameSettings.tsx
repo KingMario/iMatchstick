@@ -3,6 +3,7 @@ import { type DragHand } from "@/lib/drag";
 import { ActionIcon } from "./ActionIcon";
 import { type CopyText, type Language } from "./copy";
 import { GameOverlay } from "./GameOverlay";
+import { InstallShortcut } from "./InstallShortcut";
 import { StatsBar } from "./StatsBar";
 import { buildId, buildSha, type usePwaUpdate } from "./usePwaUpdate";
 
@@ -104,6 +105,7 @@ export function GameSettings({
       <p className="settings-feedback" role="status">
         {feedback}
       </p>
+      <InstallShortcut text={text} />
       <section className="settings-section">
         <h3>{text.version}</h3>
         <p>
@@ -154,6 +156,7 @@ export function GameSettings({
         </p>
         <hr />
         <p>{text.selectHint}</p>
+        <p>{text.deselectHint}</p>
         <p>{text.dragHint}</p>
         <p>{text.continueHint}</p>
       </section>

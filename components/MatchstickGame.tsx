@@ -10,11 +10,16 @@ import {
   useState,
 } from "react";
 import { copy, type Language } from "@/components/matchstick/copy";
+import { AnswerProgress } from "@/components/matchstick/AnswerProgress";
+import { DifficultyControl } from "@/components/matchstick/DifficultyControl";
 import { GameControls } from "@/components/matchstick/GameControls";
 import { GameOverlay } from "@/components/matchstick/GameOverlay";
 import { GameSettings } from "@/components/matchstick/GameSettings";
+import { LaunchScreen } from "@/components/matchstick/LaunchScreen";
+import { MatchstickArt } from "@/components/matchstick/MatchstickArt";
 import { MatchstickChar } from "@/components/matchstick/MatchstickChar";
 import { StatsBar } from "@/components/matchstick/StatsBar";
+import { SuccessConfetti } from "@/components/matchstick/SuccessConfetti";
 import { usePwaUpdate } from "@/components/matchstick/usePwaUpdate";
 import { playApplause } from "@/lib/audio";
 import { readJson } from "@/lib/clientStorage";
@@ -43,12 +48,14 @@ import {
   type SelectedSegment,
   tryMove,
 } from "@/lib/matchstick";
+import { createStickDirections } from "@/lib/matchstickAppearance";
 import {
   normalizePuzzleDifficulty,
   pickPuzzleFromBook,
   type PuzzleDifficulty,
 } from "@/lib/puzzleBook";
 import { copyText } from "@/lib/share";
+import { getSuccessFeedback } from "@/lib/success";
 import {
   getSpeechRecognitionConstructor,
   parseSpokenExpression,
@@ -116,9 +123,13 @@ export function MatchstickGame() {
   const [dragHand, setDragHand] = useState<DragHand>("right");
   const [puzzle, setPuzzle] = useState<Puzzle>(initialPuzzle);
   const [displayExpression, setDisplayExpression] = useState(puzzle.expression);
+  const [stickDirections, setStickDirections] = useState<boolean[][]>([]);
   const [selected, setSelected] = useState<SelectedSegment | null>(null);
   const [messageKey, setMessageKey] = useState<MessageKey>("selectHint");
   const [solved, setSolved] = useState(false);
+  const [successFeedback, setSuccessFeedback] = useState<ReturnType<
+    typeof getSuccessFeedback
+  > | null>(null);
   const [solvedAnswers, setSolvedAnswers] = useState<string[]>([]);
   const [timeLeft, setTimeLeft] = useState(60);
   const [showAnswers, setShowAnswers] = useState(false);
@@ -139,11 +150,11 @@ export function MatchstickGame() {
   const applauseAudio = useRef<HTMLAudioElement | null>(null);
   const speechRecognition = useRef<SpeechRecognitionLike | null>(null);
   const voiceCanceling = useRef(false);
+  const equationRef = useRef<HTMLDivElement>(null);
 
   const text = copy[language];
   const timedOut = timerEnabled && timeLeft <= 0;
   const interactionLocked = isLoading || solved || timedOut;
-  const canUndo = !isLoading && displayExpression !== puzzle.expression;
 
   const answersFound = useMemo(() => solvedAnswers.length, [solvedAnswers]);
 
@@ -321,6 +332,7 @@ export function MatchstickGame() {
     speechRecognition.current = null;
     setListening(false);
     setPuzzle(nextPuzzle);
+    setStickDirections(createStickDirections(nextPuzzle.expression.length));
     setDisplayExpression(nextPuzzle.expression);
     setSelected(null);
     setDragState(null);
@@ -395,6 +407,14 @@ export function MatchstickGame() {
     speechRecognition.current = null;
     setListening(false);
     const isNewAnswer = !solvedAnswers.includes(nextExpression);
+    setSuccessFeedback(
+      getSuccessFeedback(
+        puzzle.expression,
+        nextExpression,
+        solvedAnswers,
+        puzzle.answers.length,
+      ),
+    );
 
     if (soundEnabled && isNewAnswer) {
       playApplause(applauseAudio.current);
@@ -818,7 +838,7 @@ export function MatchstickGame() {
   }
 
   if (!mounted) {
-    return null;
+    return <LaunchScreen />;
   }
 
   return (
@@ -862,11 +882,14 @@ export function MatchstickGame() {
             onDoubleClick={handlePlayAreaDoubleClick}
           >
             <div className="status-strip">
-              <span
-                aria-label={`${text.answersFound}: ${answersFound}/${puzzle.answers.length}`}
-              >
-                {answersFound}/{puzzle.answers.length}
-              </span>
+              <AnswerProgress
+                count={answersFound}
+                total={puzzle.answers.length}
+                label={text.answersFound}
+                celebrate={solved && successFeedback?.kind !== "repeat"}
+                portrait={phonePortrait}
+                equationRef={equationRef}
+              />
               <div className="status-copy">
                 <strong className="status-brand">{text.title}</strong>
                 <span
@@ -874,7 +897,26 @@ export function MatchstickGame() {
                   role="status"
                   title={text[messageKey]}
                 >
-                  {isLoading ? text.loading : text.shortHints[messageKey]}
+                  {isLoading ? (
+                    text.loading
+                  ) : solved && successFeedback ? (
+                    <>
+                      <strong className="success-title">
+                        ✓ {text.successResults[successFeedback.kind]}
+                      </strong>
+                      <small className="success-next">
+                        {isPhone
+                          ? answersFound === puzzle.answers.length
+                            ? text.successNextCompact
+                            : text.successMoreCompact
+                          : answersFound === puzzle.answers.length
+                            ? text.successNext
+                            : text.successMore}
+                      </small>
+                    </>
+                  ) : (
+                    text.shortHints[messageKey]
+                  )}
                 </span>
               </div>
               <span
@@ -888,8 +930,15 @@ export function MatchstickGame() {
             </div>
 
             <div className="equation-viewport">
+              <DifficultyControl
+                isLoading={isLoading}
+                text={text}
+                difficulty={difficulty}
+                onDifficultyChange={changeDifficulty}
+              />
               <div
-                className="equation"
+                ref={equationRef}
+                className={`equation ${solved && successFeedback ? `equation-solved success-${successFeedback.kind}` : ""}`}
                 aria-label={displayExpression}
                 style={
                   {
@@ -903,6 +952,11 @@ export function MatchstickGame() {
                     char={char}
                     position={position}
                     rotatedClockwise={phonePortrait}
+                    directions={stickDirections[position] ?? []}
+                    solved={solved}
+                    successDestination={
+                      solved ? successFeedback?.destination : null
+                    }
                     selected={selected}
                     selectionActive={selected !== null}
                     interactionLocked={interactionLocked}
@@ -915,7 +969,26 @@ export function MatchstickGame() {
                     labels={text}
                   />
                 ))}
+                {solved && successFeedback?.kind === "complete" ? (
+                  <SuccessConfetti />
+                ) : null}
               </div>
+              <GameControls
+                isLoading={isLoading}
+                text={text}
+                showAnswers={showAnswers}
+                listening={listening}
+                solved={solved}
+                interactionLocked={interactionLocked}
+                onNewPuzzle={startNewPuzzle}
+                onUndo={undoPuzzle}
+                onToggleAnswers={() => setShowAnswers((value) => !value)}
+                onOpenSettings={() => {
+                  setShareFeedback(null);
+                  setSettingsOpen(true);
+                }}
+                onVoiceAnswer={startVoiceAnswer}
+              />
             </div>
 
             {drag ? (
@@ -928,28 +1001,15 @@ export function MatchstickGame() {
                   width: drag.helperSize,
                   height: drag.helperSize,
                 }}
-              />
+              >
+                <MatchstickArt
+                  orientation="horizontal"
+                  reversed={
+                    stickDirections[drag.from.position]?.[drag.from.segment]
+                  }
+                />
+              </div>
             ) : null}
-
-            <GameControls
-              isLoading={isLoading}
-              text={text}
-              difficulty={difficulty}
-              showAnswers={showAnswers}
-              listening={listening}
-              solved={solved}
-              interactionLocked={interactionLocked}
-              canUndo={canUndo}
-              onDifficultyChange={changeDifficulty}
-              onNewPuzzle={startNewPuzzle}
-              onUndo={undoPuzzle}
-              onToggleAnswers={() => setShowAnswers((value) => !value)}
-              onOpenSettings={() => {
-                setShareFeedback(null);
-                setSettingsOpen(true);
-              }}
-              onVoiceAnswer={startVoiceAnswer}
-            />
           </section>
         </div>
       </section>

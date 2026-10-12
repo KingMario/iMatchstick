@@ -8,17 +8,24 @@ Move exactly one matchstick to turn an incorrect equation into a correct one. Th
 
 - Uses an offline generated puzzle book with nine structural difficulty groups.
 - Supports tap-to-select and drag-and-drop solving.
+- Successful tap, drag, and voice answers share visual feedback independently of sound: the placed match pulses, the equation briefly lights up, and a checkmark remains visible. New answers animate progress; finding all answers adds a short confetti celebration. Repeated answers retain confirmation without progress or confetti, and reduced-motion mode uses static feedback.
+- For a new answer, a checkmark travels from the equation to the found-answer count before that number advances. Repeated answers do not fly or increment. Undo, viewport changes, and backgrounding settle the displayed count without changing recorded answers; reduced-motion mode updates it immediately.
 - The More overlay saves your preferred drag hand. Left-hand mode places the preview below-right of the finger in phone portrait and above-right in landscape. Right-hand mode (default) uses above-right in phone portrait and above-left in landscape. Snapping and dropping use the preview position.
-- Uses original matchstick image assets.
+- Matchsticks use sketch-style SVG artwork with irregular contours and retraced ink strokes. Shortened artwork leaves gaps between neighboring segments without shrinking the touch targets. Each new puzzle assigns random match-head directions to all segment positions, including the equals sign. Directions remain fixed at each position through selection, solutions, and undo; they do not affect the puzzle rules. The small dragging matchstick rotates unless reduced motion is enabled. Action icons use hand-drawn SVG artwork.
 - Provides grouped difficulty selection from Level 0 to Level 8.
 - Offers optional 60-second timer and sound effects.
 - Tracks solved count, streak, skipped puzzles, and supports resetting stats.
 - Supports Chinese and English UI.
 - Supports puzzle sharing through the `?puzzle=` URL parameter with answer validation.
 - Fits the game into a single phone screen. In portrait, the equation rotates 90 degrees clockwise; tap targets, drag previews, and drop snapping use the displayed positions. Landscape uses the horizontal equation layout.
-- On phones, a left-side toolbar in portrait and a bottom toolbar in landscape provide direct access to level selection, new puzzles, undo, answers, and voice input. Answer progress, a short hint, and the optional countdown run vertically down the right side in portrait and along the top in landscape; the portrait equation uses the full available height.
+- Controls occupy reserved space inside the playground. On portrait phones, level selection runs across the top and action buttons across the bottom. In landscape, level selection forms a column with vertical label text on the left, and action buttons form a column on the right. Action buttons are ordered New, Undo, Answers, Voice, More. Undo is enabled after a correct answer, restores the original puzzle, and preserves found answers. Reserved space keeps controls clear of the equation. Answer progress, a short hint, and the optional countdown run vertically down the right side in portrait and along the top in landscape.
 - The More overlay contains language, timer, sound, sharing, statistics, instructions, and project links. Answers open in a separate overlay without resizing the puzzle. Overlays close with the close button, Escape, or a tap on the backdrop.
 - Supports PWA installation and offline cache.
+- More includes Add to Home Screen. Supporting browsers open their native install prompt after a click; other browsers show platform-specific instructions. iPhone/iPad instructions use Safari's Share menu. Installation is never triggered automatically. Standalone launches and confirmed installation events show the installed state; ordinary browser tabs cannot reliably detect every existing installation.
+- The custom installation flow suppresses the automatic mini-infobar on supporting browsers and keeps the install event for the More button. Browser-managed menu installation remains subject to the browser's own availability rules.
+- Android-derived PNG icons use `purpose: any`; their artwork reaches the edges and is not designed for maskable cropping.
+- The original Android splash image appears while the web game initializes, with no minimum display duration. It is included in the static HTML loading fallback and offline cache; the operating system's pre-page launch screen is separate.
+- The splash uses text copyright and rotates clockwise on portrait phones. Home-screen icons use the Android matchstick artwork, resampled from its 114-pixel source to 180, 192, and 512 pixels.
 - Exports as a static site for GitHub Pages.
 
 ## Development

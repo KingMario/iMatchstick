@@ -1,4 +1,5 @@
 import { type PointerEvent } from "react";
+import { MatchstickArt } from "./MatchstickArt";
 import {
   getDraggableSegments,
   getVisibleSegments,
@@ -9,6 +10,9 @@ type MatchstickCharProps = {
   char: string;
   position: number;
   rotatedClockwise: boolean;
+  directions: boolean[];
+  successDestination?: SelectedSegment | null;
+  solved?: boolean;
   selected: SelectedSegment | null;
   selectionActive: boolean;
   interactionLocked: boolean;
@@ -34,6 +38,9 @@ export function MatchstickChar({
   char,
   position,
   rotatedClockwise,
+  directions,
+  successDestination,
+  solved,
   selected,
   selectionActive,
   interactionLocked,
@@ -48,8 +55,17 @@ export function MatchstickChar({
   if (char === "=") {
     return (
       <div className="match-char equal-char" aria-label={labels.equalsLabel}>
-        <span />
-        <span />
+        <span className="equals-upper">
+          <MatchstickArt orientation="horizontal" reversed={directions[0]} />
+        </span>
+        <span className="equals-lower">
+          <MatchstickArt orientation="horizontal" reversed={directions[1]} />
+        </span>
+        {solved ? (
+          <i className="equation-success-check" aria-hidden="true">
+            ✓
+          </i>
+        ) : null}
       </div>
     );
   }
@@ -93,6 +109,10 @@ export function MatchstickChar({
                 : `segment-${segment}`,
               visible ? "visible" : "placeholder",
               selectedHere ? "selected" : "",
+              successDestination?.position === position &&
+              successDestination.segment === segment
+                ? "success-destination"
+                : "",
             ].join(" ")}
             disabled={!actionable}
             aria-label={labels.segmentLabel.replace(
@@ -116,7 +136,14 @@ export function MatchstickChar({
             onPointerCancel={onSegmentPointerCancel}
             onContextMenu={(event) => event.preventDefault()}
             onDragStart={(event) => event.preventDefault()}
-          />
+          >
+            {visible ? (
+              <MatchstickArt
+                orientation={orientation}
+                reversed={directions[segment]}
+              />
+            ) : null}
+          </button>
         );
       })}
     </div>

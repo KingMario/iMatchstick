@@ -1,5 +1,46 @@
 export const copy = {
   zh: {
+    installShortcut: "创建桌面书签",
+    installInstalled: "已添加到桌面",
+    installPrompting: "正在打开安装提示…",
+    installStatus: {
+      prompting: "请在浏览器弹窗中确认安装。",
+      accepted:
+        "已确认安装请求，请等待浏览器完成，然后在主屏幕、桌面或应用列表中查找游戏。",
+      dismissed: "已取消安装，游戏不受影响。稍后可通过浏览器菜单添加。",
+      failed: "未能打开安装提示，请按下方步骤手动添加。",
+      installed: "可以从主屏幕、桌面或应用列表中的图标打开游戏。",
+    },
+    installSteps: {
+      ios: [
+        "在 Safari 中打开本游戏。",
+        "点击浏览器的分享按钮；部分版本需先打开页面菜单或“更多”。",
+        "选择“添加到主屏幕”，确认名称后点击“添加”。若有“作为 Web App 打开”选项，可将其开启。",
+      ],
+      android: [
+        "在 Chrome 或其他支持安装的浏览器中打开本游戏。",
+        "打开浏览器菜单，选择“添加到主屏幕”或“安装应用”。",
+        "按提示确认添加，然后从主屏幕或应用列表打开游戏。",
+      ],
+      desktop: [
+        "在浏览器地址栏或菜单中查找“安装应用”或“创建快捷方式”。",
+        "按提示确认安装或创建。",
+        "若没有该选项，可尝试 Chrome 或 Edge；也可以先收藏到浏览器书签。",
+      ],
+    },
+    installManualNote:
+      "菜单名称因浏览器版本而异。若在聊天应用内打开，请先用系统浏览器打开链接。",
+    installSecureNote:
+      "当前连接不是安全上下文，浏览器可能不提供安装功能。请使用已发布的 HTTPS 站点；本地 IP 的 HTTP 地址通常只适合调试。",
+    successResults: {
+      new: "正确！",
+      complete: "本题答案已全部找到",
+      repeat: "正确，这个答案已找到",
+    },
+    successNext: "双击背景出新题",
+    successNextCompact: "双击背景出新题",
+    successMoreCompact: "复原找解，双击出题",
+    successMore: "复原找其他答案，或双击背景出新题",
     version: "版本",
     checkUpdate: "检查更新",
     updateAvailable: "新版可用，查看更新",
@@ -25,12 +66,12 @@ export const copy = {
     statistics: "统计",
     instructions: "玩法",
     levelHint:
-      "级别共 0–8 级，按数字位数和火柴移动方式划分。点击级别旁的减号或加号切换，游戏会按所选级别重新出题。切换级别不计为跳过。",
+      "级别共 0–8 级，按数字位数和火柴移动方式划分。点击左箭头（横屏时为上箭头）降低级别，点击右箭头（横屏时为下箭头）提升级别，游戏会按所选级别重新出题。切换级别不计为跳过。",
     answerIconHint: "钥匙按钮：查看本题的可行答案。",
     newPuzzleIconHint:
       "新题按钮：按当前级别随机出一道新题。当前题目尚未找到任何答案时，点击新题会计为跳过。",
     undoIconHint:
-      "回退按钮：回到原题，可以用来考别人，或继续寻找其他答案。已找到的答案记录会保留。",
+      "回退按钮：位于操作按钮组中新题按钮之后，答对后可用。点击回到原题，可以用来考别人，或继续寻找其他答案。已找到的答案记录会保留。",
     voiceIconHint:
       "麦克风按钮：用语音解答，请说出完整算式；再次点击可取消语音输入。",
     answerProgressHint:
@@ -90,6 +131,7 @@ export const copy = {
     answersFound: "答案",
     selectHint: "点击一根可移动的火柴，再点击虚线位置。",
     selectedHint: "选择一个虚线位置放下火柴。",
+    deselectHint: "选错了火柴？点击空白处取消选中，或直接点击另一根火柴改选。",
     correct: "正确！点击新题，或双击背景继续。",
     wrong: "还不对，再试一次。",
     timeout: "时间到。可以查看答案或开始新题。",
@@ -110,6 +152,51 @@ export const copy = {
     segmentLabel: "第 {segment} 根火柴",
   },
   en: {
+    installShortcut: "Add to Home Screen",
+    installInstalled: "Added to Home Screen",
+    installPrompting: "Opening install prompt…",
+    installStatus: {
+      prompting: "Confirm installation in the browser prompt.",
+      accepted:
+        "Installation requested. Wait for the browser to finish, then look for the game on your home screen, desktop, or app list.",
+      dismissed:
+        "Installation canceled. Your game is unchanged. You can add it later from the browser menu.",
+      failed:
+        "The install prompt could not open. Follow the manual steps below.",
+      installed:
+        "Open the game using its icon on your home screen, desktop, or app list.",
+    },
+    installSteps: {
+      ios: [
+        "Open this game in Safari.",
+        "Tap the browser's Share button. Some versions place it inside the Page Menu or More menu.",
+        "Choose Add to Home Screen, confirm the name, and tap Add. Enable Open as Web App if that option is available.",
+      ],
+      android: [
+        "Open this game in Chrome or another browser that supports installation.",
+        "Open the browser menu and choose Add to Home Screen or Install app.",
+        "Confirm the request, then open the game from your home screen or app list.",
+      ],
+      desktop: [
+        "Look for Install app or Create shortcut in the browser's address bar or menu.",
+        "Confirm the installation or shortcut creation.",
+        "If neither option is available, try Chrome or Edge, or save a regular browser bookmark.",
+      ],
+    },
+    installManualNote:
+      "Menu labels vary by browser version. If you opened this link inside a chat app, open it in your system browser first.",
+    installSecureNote:
+      "This connection is not a secure context, so installation may be unavailable. Use the published HTTPS site; HTTP on a local IP is generally for testing only.",
+    successResults: {
+      new: "Correct!",
+      complete: "All answers found",
+      repeat: "Correct, already found",
+    },
+    successNext: "Double-tap the background for a new puzzle",
+    successNextCompact: "Double-tap for new",
+    successMoreCompact: "Undo for more · Double-tap for new",
+    successMore:
+      "Undo to find other answers, or double-tap the background for a new puzzle",
     version: "Version",
     checkUpdate: "Check for updates",
     updateAvailable: "Update available. View update",
@@ -135,12 +222,12 @@ export const copy = {
     statistics: "Statistics",
     instructions: "How to play",
     levelHint:
-      "Levels 0–8 group puzzles by digit count and how the matchstick moves. Use the minus or plus button beside the level to switch and get a puzzle at that level. Changing levels does not count as a skip.",
+      "Levels 0–8 group puzzles by digit count and how the matchstick moves. Use the left arrow (up in landscape) for a lower level or the right arrow (down in landscape) for a higher level. Each change generates a puzzle at that level and does not count as a skip.",
     answerIconHint: "Key button: view the valid answers for this puzzle.",
     newPuzzleIconHint:
       "New puzzle button: generate a random puzzle at the current level. Choosing New without finding any answer to the current puzzle counts as a skip.",
     undoIconHint:
-      "Return arrow: restore the original puzzle to challenge someone else or look for other answers. Answers already found remain recorded.",
+      "Return arrow: follows New in the action buttons and is enabled after a correct answer. Tap to restore the original puzzle to challenge someone else or look for other answers. Answers already found remain recorded.",
     voiceIconHint:
       "Microphone button: answer by speaking the complete equation. Tap again to cancel voice input.",
     answerProgressHint:
@@ -206,6 +293,8 @@ export const copy = {
     answersFound: "Answers",
     selectHint: "Tap a movable match, then tap a dashed position.",
     selectedHint: "Choose a dashed position for the match.",
+    deselectHint:
+      "Picked the wrong match? Tap the background to clear the selection, or simply tap another match to switch to it.",
     correct: "Correct. Tap New or double-click the background to continue.",
     wrong: "Not quite. Try another move.",
     timeout: "Time is up. View answers or start a new puzzle.",

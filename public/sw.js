@@ -2,13 +2,13 @@ const CACHE_NAME = "imatchstick-pwa-__BUILD_ID__";
 const APP_SHELL = [
   "./",
   "./manifest.webmanifest",
-  "./icons/icon.svg",
+  "./splash.png",
+  "./icons/apple-touch-icon.png",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
   "./hurrah.mp3",
   "./matchsticks/empty_h.png",
   "./matchsticks/empty_v.png",
-  "./matchsticks/stick_h.png",
-  "./matchsticks/stick_s.gif",
-  "./matchsticks/stick_v.png",
 ];
 
 self.addEventListener("install", (event) => {

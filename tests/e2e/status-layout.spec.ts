@@ -27,6 +27,45 @@ for (const language of ["zh", "en"]) {
       expect(Math.abs(brandBox.y - hintBox.y)).toBeLessThan(1);
       expect(brandBox.x + brandBox.width).toBeLessThan(hintBox.x);
       expect(hintBox.x + hintBox.width).toBeLessThanOrEqual(width);
+
+      await page.goto("/?puzzle=9-9%3D5");
+      for (const [sourcePosition, targetPosition, targetSegment] of [
+        [2, 4, 5],
+        [2, 4, 5],
+        [2, 0, 5],
+      ]) {
+        await page
+          .locator(`[data-position="${sourcePosition}"][data-segment="0"]`)
+          .tap();
+        await page
+          .locator(
+            `[data-position="${targetPosition}"][data-segment="${targetSegment}"]`,
+          )
+          .tap();
+        const result = page.locator(".success-title");
+        const next = page.locator(".success-next");
+        await expect(result).toBeVisible();
+        const resultBox = (await result.boundingBox())!;
+        const nextBox = (await next.boundingBox())!;
+        expect(
+          Math.abs(
+            resultBox.y + resultBox.height / 2 - nextBox.y - nextBox.height / 2,
+          ),
+        ).toBeLessThan(1);
+        expect(resultBox.x + resultBox.width).toBeLessThan(nextBox.x);
+        expect(nextBox.x + nextBox.width).toBeLessThanOrEqual(width);
+        expect(resultBox.height).toBeLessThan(20);
+        expect(nextBox.height).toBeLessThan(20);
+        await page.screenshot({
+          path: `/tmp/imatchstick-success-row-${language}-${width}.png`,
+        });
+        await page
+          .getByRole("button", {
+            name: language === "zh" ? "复原" : "Undo",
+            exact: true,
+          })
+          .tap();
+      }
     });
   }
 }
