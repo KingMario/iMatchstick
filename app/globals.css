@@ -409,6 +409,17 @@ h1 {
   height: calc(var(--digit-width) * 1.93);
 }
 
+/* Keep the existing width, glyph sizing and 64px control reserves. Only align
+   the full character group inside that corridor, leaving a 12px control gap.
+   Portrait rotates this same logical landscape layout without a second reflow. */
+.phone-layout .equation[data-drag-hand="left"] {
+  justify-content: flex-end;
+}
+
+.phone-layout .equation[data-drag-hand="right"] {
+  justify-content: flex-start;
+}
+
 .phone-layout .operator-char,
 .phone-layout .equal-char {
   width: calc(var(--digit-width) * 0.78);

@@ -947,6 +947,7 @@ export function MatchstickGame() {
               />
               <div
                 ref={equationRef}
+                data-drag-hand={dragHand}
                 className={`equation ${solved && successFeedback ? `equation-solved success-${successFeedback.kind}` : ""}`}
                 aria-label={displayExpression}
                 style={
