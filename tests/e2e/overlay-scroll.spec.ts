@@ -6,7 +6,7 @@ test("portrait dialog scrolling follows the rotated content axis", async ({
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/?puzzle=7-5%3D3");
-  await page.locator(".play-controls button").last().tap();
+  await page.locator(".settings-button").tap();
   await page
     .locator("dialog[open] summary")
     .filter({ hasText: "玩法说明" })
@@ -78,7 +78,7 @@ test("portrait dialog scrolling follows the rotated content axis", async ({
     await page.getByRole("button", { name: "Close", exact: true }).tap();
     await expect(page.locator("dialog[open]")).toHaveCount(0);
     await page.setViewportSize({ width: 568, height: 320 });
-    await page.locator(".play-controls button").last().tap();
+    await page.locator(".settings-button").tap();
     const landscape = (await body.boundingBox())!;
     await body.evaluate((element) => {
       element.scrollTop = 0;
@@ -101,7 +101,7 @@ test("native touch gestures are not canceled or manually scrolled", async ({
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/?puzzle=7-5%3D3");
-  const opener = page.locator(".play-controls button").last();
+  const opener = page.locator(".settings-button");
   await opener.tap();
   await page
     .locator("dialog[open] summary")

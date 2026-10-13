@@ -98,7 +98,7 @@ test.describe("desktop presentation", () => {
         });
         await page
           .getByRole("button", {
-            name: language === "zh" ? "更多" : "More",
+            name: language === "zh" ? "设置" : "Settings",
             exact: true,
           })
           .click();
@@ -201,12 +201,12 @@ test.describe("desktop presentation", () => {
       page.locator(".bottom-row .stats .stat-item strong"),
     ).toHaveText(["1", "1", "0"]);
     const labels = [
+      "Settings",
       "Increase difficulty group",
       "Decrease difficulty group",
       "New",
       "Undo",
       "Answer",
-      "More",
       "Reset stats",
       "GitHub",
     ];
@@ -229,7 +229,7 @@ test.describe("desktop presentation", () => {
     await expect(
       page.locator(".bottom-row .stats .stat-item strong"),
     ).toHaveText(["0", "0", "0"]);
-    const more = page.getByRole("button", { name: "More", exact: true });
+    const more = page.getByRole("button", { name: "Settings", exact: true });
     await more.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
@@ -299,7 +299,7 @@ test.describe("phone presentation", () => {
         await expect(page.locator(".bottom-row")).toHaveCount(0);
         await page.locator('[data-position="4"][data-segment="3"]').tap();
         await page.locator('[data-position="4"][data-segment="5"]').tap();
-        const label = language === "zh" ? "更多" : "More";
+        const label = language === "zh" ? "设置" : "Settings";
         await page.getByRole("button", { name: label, exact: true }).tap();
         const dialog = page.getByRole("dialog");
         await expect(dialog.locator("details[open]")).toHaveCount(0);

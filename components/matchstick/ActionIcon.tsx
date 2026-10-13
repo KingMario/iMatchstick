@@ -9,7 +9,7 @@ export type ActionIconName =
   | "share"
   | "undo"
   | "voice"
-  | "more"
+  | "settings"
   | "previous"
   | "next";
 
@@ -67,12 +67,11 @@ const drawings: Record<ActionIconName, ReactNode> = {
       <path className="icon-red" d="m9 30 7-1" />
     </>
   ),
-  more: (
-    <g fill="currentColor" strokeWidth="1.2">
-      <path d="M5 13c-4 0-3 7 1 6 4-1 3-6-1-6Z" />
-      <path d="M16 12c-4 0-4 7 0 7 5 0 4-7 0-7Z" />
-      <path d="M27 13c-4-1-5 6-1 6 5 1 5-6 1-6Z" />
-    </g>
+  settings: (
+    <>
+      <path d="m13 3 6 .2.8 4 3 1.8 3.8-1.2 2.8 5.2-3 2.8v3.4l2.8 2.8-3 5.1-3.8-1.3-3 1.6-1 3.7-5.8-.2-.8-3.8-3-1.8-3.7 1.1-2.8-5.2 3-2.6.1-3.5-2.8-2.9 3.1-4.9 3.7 1.2 3-1.7Z" />
+      <path d="M16 11c-7-.2-7 10 0 10 6.8 0 6.9-10.2 0-10Z" />
+    </>
   ),
 };
 

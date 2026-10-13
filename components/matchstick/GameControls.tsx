@@ -12,7 +12,6 @@ type GameControlsProps = {
   onNewPuzzle: () => void;
   onUndo: () => void;
   onToggleAnswers: () => void;
-  onOpenSettings: () => void;
   onVoiceAnswer: () => void;
 };
 
@@ -26,7 +25,6 @@ export function GameControls({
   onNewPuzzle,
   onUndo,
   onToggleAnswers,
-  onOpenSettings,
   onVoiceAnswer,
 }: GameControlsProps) {
   return (
@@ -65,15 +63,6 @@ export function GameControls({
           onClick={onVoiceAnswer}
         >
           <ActionIcon name="voice" />
-        </button>
-        <button
-          type="button"
-          aria-label={text.more}
-          title={text.more}
-          aria-haspopup="dialog"
-          onClick={onOpenSettings}
-        >
-          <ActionIcon name="more" />
         </button>
       </div>
     </div>

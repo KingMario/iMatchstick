@@ -25,19 +25,29 @@ async function prepare(
 
 async function expectTopRight(page: Page) {
   const counter = page.locator(".answer-progress");
-  await expect(counter).toHaveCSS("grid-column-start", "3");
+  const actions = page.locator(".status-actions");
+  const gear = page.locator(".settings-button");
+  await expect(actions).toHaveCSS("grid-column-start", "3");
   await expect(page.locator(".status-timer")).toHaveCSS(
     "grid-column-start",
     "1",
   );
   const count = (await counter.boundingBox())!;
   const strip = (await page.locator(".status-strip").boundingBox())!;
+  const settings = (await gear.boundingBox())!;
+  expect(settings.x).toBeGreaterThan(count.x + count.width);
+  expect(settings.width).toBeGreaterThanOrEqual(40);
+  expect(settings.height).toBeGreaterThanOrEqual(40);
+  expect(
+    Math.abs(settings.y + settings.height / 2 - count.y - count.height / 2),
+  ).toBeLessThan(1);
+  await expect(page.locator(".play-controls button")).toHaveCount(4);
   const copy = (await page.locator(".status-copy").boundingBox())!;
   const timer = (await page.locator(".status-timer").boundingBox())!;
   const controls = (await page.locator(".play-controls").boundingBox())!;
-  expect(Math.abs(count.x + count.width - strip.x - strip.width)).toBeLessThan(
-    1,
-  );
+  expect(
+    Math.abs(settings.x + settings.width - strip.x - strip.width),
+  ).toBeLessThan(1);
   expect(count.y).toBeGreaterThanOrEqual(strip.y);
   expect(count.y + count.height).toBeLessThanOrEqual(strip.y + strip.height);
   expect(timer.x + timer.width).toBeLessThanOrEqual(copy.x);
@@ -91,8 +101,13 @@ for (const desktop of [false, true]) {
             await expectTopRight(page);
           } else {
             await expect(page.locator(".phone-portrait")).toBeVisible();
-            await expect(counter).toHaveCSS("grid-column-start", "3");
-            const count = (await counter.boundingBox())!;
+            await expect(page.locator(".status-actions")).toHaveCSS(
+              "grid-column-start",
+              "3",
+            );
+            const count = (await page
+              .locator(".status-actions")
+              .boundingBox())!;
             const strip = (await page.locator(".status-strip").boundingBox())!;
             // Shared top-right becomes the physical bottom-right after rotation.
             expect(
@@ -136,5 +151,49 @@ for (const desktop of [false, true]) {
         });
       }
     }
+  });
+}
+
+for (const mobile of [false, true]) {
+  test.describe(`settings gear keyboard and rotation ${mobile}`, () => {
+    test.use({ isMobile: mobile, hasTouch: mobile });
+    test("native keys, dialog dismissal and hit target remain usable", async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: 736, height: 414 });
+      await prepare(page, "en", false);
+      const gear = page.getByRole("button", { name: "Settings", exact: true });
+      await expect(gear.locator('svg[data-icon="settings"]')).toHaveCount(1);
+      await expect(gear).toHaveAttribute("title", "Settings");
+      await expect(gear).toHaveAttribute("aria-haspopup", "dialog");
+      expect(
+        await gear.evaluate((el) =>
+          Boolean(el.closest('[role="status"], [aria-live]')),
+        ),
+      ).toBe(false);
+      for (const key of ["Enter", "Space"]) {
+        await gear.focus();
+        await gear.press(key);
+        await expect(page.getByRole("dialog")).toBeVisible();
+        await expect(gear).toHaveAttribute("aria-expanded", "true");
+        await page.keyboard.press("Escape");
+        await expect(page.getByRole("dialog")).toHaveCount(0);
+        await expect(gear).toBeFocused();
+        await expect(gear).toHaveAttribute("aria-expanded", "false");
+      }
+      if (mobile) {
+        await page.setViewportSize({ width: 414, height: 736 });
+        await expect(page.locator(".phone-portrait")).toBeVisible();
+        const counter = (await page.locator(".answer-progress").boundingBox())!;
+        const box = (await gear.boundingBox())!;
+        expect(box.y).toBeGreaterThan(counter.y + counter.height);
+        expect(
+          Math.abs(box.x + box.width / 2 - counter.x - counter.width / 2),
+        ).toBeLessThan(1);
+      }
+      await gear.click();
+      await page.getByRole("dialog").locator(".overlay-close").click();
+      await expect(gear).toBeFocused();
+    });
   });
 }

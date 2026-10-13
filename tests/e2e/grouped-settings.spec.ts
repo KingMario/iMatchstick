@@ -34,7 +34,7 @@ for (const language of ["zh", "en"] as const) {
         await page.goto("/?puzzle=7-5%3D3");
         await page
           .getByRole("button", {
-            name: language === "zh" ? "更多" : "More",
+            name: language === "zh" ? "设置" : "Settings",
             exact: true,
           })
           .click();
@@ -105,7 +105,7 @@ test("settings disclosures support keyboard, language changes and reopen without
   page,
 }) => {
   await page.goto("/?puzzle=7-5%3D3");
-  await page.getByRole("button", { name: "更多", exact: true }).click();
+  await page.getByRole("button", { name: "设置", exact: true }).click();
   const dialog = page.locator("dialog[open]");
   const panels = dialog.locator("details");
   const help = panels.nth(0);
@@ -138,7 +138,7 @@ test("settings disclosures support keyboard, language changes and reopen without
   await expect(help).toHaveAttribute("open", "");
   await expect(panels.nth(2)).not.toHaveAttribute("open");
   await page.keyboard.press("Escape");
-  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(help).toHaveAttribute("open", "");
   await expect(panels.nth(1)).toHaveAttribute("open", "");
   await expect(panels.nth(2)).not.toHaveAttribute("open");
@@ -164,7 +164,7 @@ test("settings disclosures support keyboard, language changes and reopen without
       dragHand: "left",
     });
   await page.reload();
-  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await expect(dialog.locator("details[open]")).toHaveCount(0);
   await expect(
     dialog.getByRole("checkbox", { name: "Timer", exact: true }),

@@ -21,7 +21,7 @@ for (const [agent, expected] of [
       agent,
     );
     await page.goto("/?puzzle=7-5%3D3");
-    await page.getByRole("button", { name: "更多", exact: true }).tap();
+    await page.getByRole("button", { name: "设置", exact: true }).tap();
     await page
       .locator("dialog[open] summary")
       .filter({ hasText: "关于与版本" })
@@ -73,7 +73,7 @@ for (const outcome of [
     expect(
       await page.locator("html").getAttribute("data-install-prompts"),
     ).toBeNull();
-    await page.getByRole("button", { name: "更多", exact: true }).tap();
+    await page.getByRole("button", { name: "设置", exact: true }).tap();
     await page
       .locator("dialog[open] summary")
       .filter({ hasText: "关于与版本" })
@@ -114,7 +114,7 @@ test("iOS home-screen launch shows installed state", async ({ page }) => {
     Object.defineProperty(navigator, "standalone", { value: true }),
   );
   await page.goto("/?puzzle=7-5%3D3");
-  await page.getByRole("button", { name: "更多", exact: true }).tap();
+  await page.getByRole("button", { name: "设置", exact: true }).tap();
   await page
     .locator("dialog[open] summary")
     .filter({ hasText: "关于与版本" })

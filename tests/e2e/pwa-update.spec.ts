@@ -77,7 +77,7 @@ test("production updates wait for consent and retain old gameplay until reload",
   try {
     const address = server.address() as { port: number };
     await page.goto(`http://127.0.0.1:${address.port}/?puzzle=7-5%3D3`);
-    await page.getByRole("button", { name: "更多", exact: true }).tap();
+    await page.getByRole("button", { name: "设置", exact: true }).tap();
     await page
       .locator("dialog[open] summary")
       .filter({ hasText: "关于与版本" })
@@ -109,7 +109,7 @@ test("production updates wait for consent and retain old gameplay until reload",
       "aria-label",
       "7-5=2",
     );
-    await page.getByRole("button", { name: "更多", exact: true }).tap();
+    await page.getByRole("button", { name: "设置", exact: true }).tap();
     await page.getByRole("button", { name: "EN", exact: true }).tap();
     await page.locator("dialog[open] details[open] summary").tap();
     await expect(page.locator("dialog[open] details[open]")).toHaveCount(0);
@@ -121,7 +121,7 @@ test("production updates wait for consent and retain old gameplay until reload",
       "data-test-build",
       "new",
     );
-    await page.getByRole("button", { name: "More", exact: true }).tap();
+    await page.getByRole("button", { name: "Settings", exact: true }).tap();
     await page
       .locator("dialog[open] summary")
       .filter({ hasText: "About & version" })

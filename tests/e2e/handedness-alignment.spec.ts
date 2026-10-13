@@ -253,7 +253,7 @@ async function expectPhoneAlignment(page: Page, hand: Hand) {
 async function selectHand(page: Page, language: Language, hand: Hand) {
   await page
     .getByRole("button", {
-      name: language === "zh" ? "更多" : "More",
+      name: language === "zh" ? "设置" : "Settings",
       exact: true,
     })
     .click();
@@ -486,7 +486,7 @@ test.describe("desktop ignores saved phone handedness", () => {
           expectSameLayout(left.aligned, right.aligned);
           await page
             .getByRole("button", {
-              name: language === "zh" ? "更多" : "More",
+              name: language === "zh" ? "设置" : "Settings",
               exact: true,
             })
             .click();

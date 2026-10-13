@@ -31,7 +31,7 @@ test("phone safe areas contain the board, dialogs and close button", async ({
       await cdp.send("Emulation.setSafeAreaInsetsOverride", { insets });
       await page.goto("/?puzzle=7-5%3D3");
       await expect(page.locator(".phone-layout")).toBeVisible();
-      await page.locator(".play-controls button").last().tap();
+      await page.locator(".settings-button").tap();
       for (const selector of [
         ".equation",
         ".status-strip",
@@ -108,7 +108,7 @@ test("portrait More scrolls with touch in its rotated direction", async ({
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/?puzzle=7-5%3D3");
-  await page.locator(".play-controls button").last().tap();
+  await page.locator(".settings-button").tap();
   await page
     .locator("dialog[open] summary")
     .filter({ hasText: "玩法说明" })
@@ -188,7 +188,7 @@ for (const language of ["zh", "en"]) {
         })),
       ).toEqual(size);
 
-      const more = page.locator(".play-controls button").last();
+      const more = page.locator(".settings-button");
       await more.tap();
       const dialog = page.locator("dialog[open]");
       await expect(dialog).toHaveCSS("transform", /matrix\(0, 1, -1, 0,/);

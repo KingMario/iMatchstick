@@ -44,7 +44,7 @@ for (const device of [
       const page = await context.newPage();
       await page.goto("/?puzzle=7-5%3D3");
       await expect(page.locator(".top-bar .language-switch")).toHaveCount(0);
-      await page.getByRole("button", { name: "更多", exact: true }).click();
+      await page.getByRole("button", { name: "设置", exact: true }).click();
       const dialog = page.getByRole("dialog");
       const hand = dialog.getByRole("combobox", {
         name: "拖拽惯用手",

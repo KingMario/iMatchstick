@@ -83,7 +83,7 @@ for (const language of ["zh", "en"]) {
       );
       await expect(actions).toBeVisible();
       const buttons = await actions.locator("button").all();
-      expect(buttons).toHaveLength(5);
+      expect(buttons).toHaveLength(4);
       await expect(buttons[1]).toHaveClass("undo-button");
       let previous: {
         x: number;

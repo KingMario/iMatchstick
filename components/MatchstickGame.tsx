@@ -891,14 +891,30 @@ export function MatchstickGame() {
             onDoubleClick={handlePlayAreaDoubleClick}
           >
             <div className="status-strip">
-              <AnswerProgress
-                count={answersFound}
-                total={puzzle.answers.length}
-                label={text.answersFound}
-                celebrate={solved && successFeedback?.kind !== "repeat"}
-                portrait={phonePortrait}
-                equationRef={equationRef}
-              />
+              <div className="status-actions">
+                <AnswerProgress
+                  count={answersFound}
+                  total={puzzle.answers.length}
+                  label={text.answersFound}
+                  celebrate={solved && successFeedback?.kind !== "repeat"}
+                  portrait={phonePortrait}
+                  equationRef={equationRef}
+                />
+                <button
+                  type="button"
+                  className="settings-button"
+                  aria-label={text.settingsTitle}
+                  title={text.settingsTitle}
+                  aria-haspopup="dialog"
+                  aria-expanded={settingsOpen}
+                  onClick={() => {
+                    setShareFeedback(null);
+                    setSettingsOpen(true);
+                  }}
+                >
+                  <ActionIcon name="settings" />
+                </button>
+              </div>
               <div className="status-copy">
                 <strong className="status-brand">{text.title}</strong>
                 <span
@@ -1000,10 +1016,6 @@ export function MatchstickGame() {
                 onNewPuzzle={startNewPuzzle}
                 onUndo={undoPuzzle}
                 onToggleAnswers={() => setShowAnswers((value) => !value)}
-                onOpenSettings={() => {
-                  setShareFeedback(null);
-                  setSettingsOpen(true);
-                }}
                 onVoiceAnswer={startVoiceAnswer}
               />
             </div>
