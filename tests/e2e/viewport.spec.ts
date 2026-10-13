@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("phone layout follows the visible viewport on launch, resize and restore", async ({
   page,

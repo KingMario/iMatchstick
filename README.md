@@ -28,6 +28,16 @@ Move exactly one matchstick to turn an incorrect equation into a correct one. Th
 - The splash uses text copyright and rotates clockwise on portrait phones. Home-screen icons use the Android matchstick artwork, resampled from its 114-pixel source to 180, 192, and 512 pixels.
 - Exports as a static site for GitHub Pages.
 
+## Matchstick Academy / 火柴入门学园
+
+First-time visitors can start the six-chapter academy or go straight to puzzles. Returning visitors keep their normal game entry; the academy is always available directly in Settings. All 24 bilingual exercises can be replayed or skipped, and every chapter is open from the overview.
+
+The curriculum separates recognition, adding/removing a stick using a matchbox, moving within one digit, transferring between independent digit cards, transferring between a digit and a sign, and finally correcting single-digit equations. These are distinct typed lesson modes; card activities are never passed to the equation engine as invented equations. Each movement exercise has an exhaustively checked one-stick solution with explicit editable-card and operation constraints. The equals sign is fixed.
+
+Learning has no timer or penalties. Tap a source and destination (or drag); use Hint, Undo, Reset, Replay, or the chapter overview whenever needed. Hints fade from outlines to a card cue, and a source/destination demonstration remains available. Entering the academy pauses the competitive clock and preserves the current puzzle, found answers, and statistics. Leaving resumes that challenge. Learning progress uses the separate versioned `imatchstick-academy-v1` local storage key. Invalid progress is discarded safely, known version-0 progress is migrated, and blocked storage leaves the session usable.
+
+Academy tests include exhaustive pure move validation, storage migration/failure handling, shared-renderer contracts, component-handler tests with mocked React/DOM, lifecycle source invariants, and browser scenarios in `tests/e2e/academy.spec.ts`. The existing E2E fixture identifies those suites as returning visitors so onboarding does not obscure their original test subjects. Browser test discovery does not replace executing these tests in Chromium or verifying rotated touch interaction and native scrolling on an iPhone.
+
 ## Development
 
 ```bash

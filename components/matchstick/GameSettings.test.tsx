@@ -40,6 +40,7 @@ function props(overrides: Partial<Props> = {}): Props {
     onDragHandChange: noop,
     onShare: noop,
     onClearStats: noop,
+    onOpenAcademy: noop,
     ...overrides,
   };
 }
@@ -288,4 +289,27 @@ for (const language of ["zh", "en"] as const) {
       assert.deepEqual(changes, ["left", "right"]);
     });
   }
+}
+
+testAcademyEntry();
+function testAcademyEntry() {
+  it("keeps the academy launcher outside collapsed settings groups", () => {
+    let opened = 0;
+    const input = props({
+      onOpenAcademy: () => {
+        opened += 1;
+      },
+    });
+    const tree = GameSettings(input);
+    const direct = Children.toArray(tree.props.children).filter(
+      isValidElement,
+    ) as Element[];
+    const launcher = direct.find(
+      (node) => node.props["data-testid"] === "academy-open",
+    );
+    assert.ok(launcher);
+    assert.equal(launcher.props.children, "Matchstick Academy");
+    (launcher.props.onClick as () => void)();
+    assert.equal(opened, 1);
+  });
 }

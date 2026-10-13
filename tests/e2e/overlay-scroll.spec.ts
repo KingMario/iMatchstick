@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 
 test("portrait dialog scrolling follows the rotated content axis", async ({
   page,

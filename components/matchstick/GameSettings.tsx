@@ -25,6 +25,7 @@ type GameSettingsProps = {
   onSoundChange: (enabled: boolean) => void;
   onShare: () => void;
   onClearStats: () => void;
+  onOpenAcademy: () => void;
 };
 
 export function GameSettings({
@@ -45,6 +46,7 @@ export function GameSettings({
   onSoundChange,
   onShare,
   onClearStats,
+  onOpenAcademy,
 }: GameSettingsProps) {
   return (
     <GameOverlay
@@ -54,6 +56,14 @@ export function GameSettings({
       closeLabel={text.close}
       onClose={onClose}
     >
+      <button
+        type="button"
+        className="settings-share academy-settings-entry"
+        data-testid="academy-open"
+        onClick={onOpenAcademy}
+      >
+        {language === "zh" ? "火柴入门学园" : "Matchstick Academy"}
+      </button>
       <div className="settings-common">
         <div
           className={`settings-row settings-language${isPhone ? "" : " settings-language-wide"}`}

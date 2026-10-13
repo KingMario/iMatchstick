@@ -4,7 +4,7 @@ import {
   getDraggableSegments,
   getVisibleSegments,
   type SelectedSegment,
-} from "@/lib/matchstick";
+} from "../../lib/matchstick";
 
 type MatchstickCharProps = {
   char: string;
@@ -18,6 +18,10 @@ type MatchstickCharProps = {
   interactionLocked: boolean;
   onSegmentClick: (position: number, segment: number, visible: boolean) => void;
   canDropSegment: (position: number, segment: number) => boolean;
+  canSelectSegment?: (position: number, segment: number) => boolean;
+  showTargetOutline?: (position: number, segment: number) => boolean;
+  hintSource?: SelectedSegment | null;
+  hintTarget?: SelectedSegment | null;
   onSegmentPointerDown: (
     event: PointerEvent<HTMLButtonElement>,
     position: number,
@@ -46,6 +50,10 @@ export function MatchstickChar({
   interactionLocked,
   onSegmentClick,
   canDropSegment,
+  canSelectSegment,
+  showTargetOutline,
+  hintSource,
+  hintTarget,
   onSegmentPointerDown,
   onSegmentPointerMove,
   onSegmentPointerUp,
@@ -82,7 +90,11 @@ export function MatchstickChar({
         const selectedHere =
           selected?.position === position && selected.segment === segment;
         const droppable = !visible && canDropSegment(position, segment);
-        const draggable = getDraggableSegments(char).includes(segment);
+        const draggable = canSelectSegment
+          ? canSelectSegment(position, segment)
+          : getDraggableSegments(char).includes(segment);
+        const outlined =
+          !visible && Boolean(showTargetOutline?.(position, segment));
         const orientation = getSegmentOrientation(char, segment);
         // Drag metrics use the screen-space bounds after the equation rotates.
         const visualOrientation = rotatedClockwise
@@ -93,7 +105,7 @@ export function MatchstickChar({
           ((visible && draggable) ||
             (!visible && droppable && selectionActive));
 
-        if (!visible && !(droppable && selectionActive)) {
+        if (!visible && !(droppable && selectionActive) && !outlined) {
           return null;
         }
 
@@ -109,6 +121,14 @@ export function MatchstickChar({
                 : `segment-${segment}`,
               visible ? "visible" : "placeholder",
               selectedHere ? "selected" : "",
+              hintSource?.position === position &&
+              hintSource.segment === segment
+                ? "academy-hint-source"
+                : "",
+              hintTarget?.position === position &&
+              hintTarget.segment === segment
+                ? "academy-hint-target"
+                : "",
               successDestination?.position === position &&
               successDestination.segment === segment
                 ? "success-destination"

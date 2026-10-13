@@ -24,7 +24,15 @@ import { StatsBar } from "@/components/matchstick/StatsBar";
 import { SuccessConfetti } from "@/components/matchstick/SuccessConfetti";
 import { usePwaUpdate } from "@/components/matchstick/usePwaUpdate";
 import { playApplause } from "@/lib/audio";
-import { readJson } from "@/lib/clientStorage";
+import { readJson, writeJson } from "@/lib/clientStorage";
+import { Academy } from "@/components/matchstick/Academy";
+import { academyLessons } from "@/lib/academy";
+import {
+  emptyAcademyProgress,
+  loadAcademy,
+  saveAcademy,
+  type AcademyProgress,
+} from "@/lib/academyStorage";
 import {
   type DragHand,
   dragStartThreshold,
@@ -136,6 +144,11 @@ export function MatchstickGame() {
   const [timeLeft, setTimeLeft] = useState(60);
   const [showAnswers, setShowAnswers] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [academyView, setAcademyView] = useState<null | "welcome" | "lessons">(
+    null,
+  );
+  const [academyProgress, setAcademyProgress] =
+    useState<AcademyProgress>(emptyAcademyProgress);
   const [shareFeedback, setShareFeedback] = useState<
     "shareCopied" | "shareDone" | "shareFailed" | null
   >(null);
@@ -156,12 +169,25 @@ export function MatchstickGame() {
 
   const text = copy[language];
   const timedOut = timerEnabled && timeLeft <= 0;
-  const interactionLocked = isLoading || solved || timedOut;
+  const interactionLocked =
+    isLoading || solved || timedOut || academyView !== null;
 
   const answersFound = useMemo(() => solvedAnswers.length, [solvedAnswers]);
 
   useEffect(() => {
     setMounted(true);
+    let storage: Storage | null = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      /* Storage may be denied. */
+    }
+    const academy = loadAcademy(
+      storage,
+      academyLessons.map((lesson) => lesson.id),
+    );
+    setAcademyProgress(academy.progress);
+    setAcademyView(academy.showWelcome ? "welcome" : null);
     applauseAudio.current = new Audio("./hurrah.mp3");
     applauseAudio.current.preload = "auto";
     applauseAudio.current.load();
@@ -175,7 +201,7 @@ export function MatchstickGame() {
     });
     const savedDifficulty = normalizePuzzleDifficulty(savedSettings.difficulty);
 
-    setLanguage(savedSettings.language);
+    setLanguage(savedSettings.language === "en" ? "en" : "zh");
     setDifficulty(savedDifficulty);
     setTimerEnabled(savedSettings.timerEnabled);
     setSoundEnabled(savedSettings.soundEnabled);
@@ -312,7 +338,7 @@ export function MatchstickGame() {
       return;
     }
 
-    window.localStorage.setItem(statsKey, JSON.stringify(stats));
+    writeJson(statsKey, stats);
   }, [mounted, stats]);
 
   useEffect(() => {
@@ -320,20 +346,23 @@ export function MatchstickGame() {
       return;
     }
 
-    window.localStorage.setItem(
-      settingsKey,
-      JSON.stringify({
-        language,
-        difficulty,
-        timerEnabled,
-        soundEnabled,
-        dragHand,
-      }),
-    );
+    writeJson(settingsKey, {
+      language,
+      difficulty,
+      timerEnabled,
+      soundEnabled,
+      dragHand,
+    });
   }, [difficulty, dragHand, language, mounted, soundEnabled, timerEnabled]);
 
   useEffect(() => {
-    if (isLoading || !timerEnabled || solved || timeLeft <= 0) {
+    if (
+      academyView !== null ||
+      isLoading ||
+      !timerEnabled ||
+      solved ||
+      timeLeft <= 0
+    ) {
       return;
     }
 
@@ -342,7 +371,7 @@ export function MatchstickGame() {
     }, 1000);
 
     return () => window.clearInterval(timerId);
-  }, [isLoading, timerEnabled, solved, timeLeft]);
+  }, [academyView, isLoading, timerEnabled, solved, timeLeft]);
 
   useEffect(() => {
     if (timerEnabled && timeLeft === 0 && !solved) {
@@ -859,6 +888,42 @@ export function MatchstickGame() {
     setDrag(nextDrag);
   }
 
+  function saveAcademyProgress(next: AcademyProgress) {
+    setAcademyProgress(next);
+    let storage: Storage | null = null;
+    try {
+      storage = window.localStorage;
+    } catch {
+      /* Keep progress for this session. */
+    }
+    saveAcademy(storage, next);
+  }
+
+  function openAcademy() {
+    setMessageKey((current) =>
+      current === "selectedHint" || current === "voiceListening"
+        ? "selectHint"
+        : current,
+    );
+    clearDragReturnTimer();
+    pendingDrag.current = null;
+    setDragState(null);
+    setSelected(null);
+    voiceCanceling.current = true;
+    speechRecognition.current?.abort();
+    speechRecognition.current = null;
+    setListening(false);
+    setSettingsOpen(false);
+    setShowAnswers(false);
+    saveAcademyProgress({ ...academyProgress, welcomed: true });
+    setAcademyView("lessons");
+  }
+
+  function closeAcademy() {
+    saveAcademyProgress({ ...academyProgress, welcomed: true });
+    setAcademyView(null);
+  }
+
   function clearStats() {
     setStats(initialStats);
   }
@@ -875,238 +940,316 @@ export function MatchstickGame() {
         phonePortrait ? "phone-portrait" : "",
       ].join(" ")}
     >
-      <header className="top-bar">
-        <div>
+      {academyView === "welcome" ? (
+        <section
+          className="academy-screen academy-welcome"
+          data-testid="academy-welcome"
+          aria-labelledby="academy-welcome-title"
+        >
           <p className="brand">Mario Studio</p>
-          <h1>{text.title}</h1>
-        </div>
-      </header>
-
-      <section className="game-layout">
-        <div className="play-column">
-          <section
-            className="play-area"
-            aria-label={text.puzzleLabel}
-            onClick={handlePlayAreaClick}
-            onDoubleClick={handlePlayAreaDoubleClick}
-          >
-            <div className="status-strip">
-              <div className="status-actions">
-                <AnswerProgress
-                  count={answersFound}
-                  total={puzzle.answers.length}
-                  label={text.answersFound}
-                  celebrate={solved && successFeedback?.kind !== "repeat"}
-                  portrait={phonePortrait}
-                  equationRef={equationRef}
-                />
-                <button
-                  type="button"
-                  className="settings-button"
-                  aria-label={text.settingsTitle}
-                  title={text.settingsTitle}
-                  aria-haspopup="dialog"
-                  aria-expanded={settingsOpen}
-                  onClick={() => {
-                    setShareFeedback(null);
-                    setSettingsOpen(true);
-                  }}
-                >
-                  <ActionIcon name="settings" />
-                </button>
-              </div>
-              <div className="status-copy">
-                <strong className="status-brand">{text.title}</strong>
-                <span
-                  className={solved ? "success" : ""}
-                  role="status"
-                  title={text[messageKey]}
-                >
-                  {isLoading ? (
-                    text.loading
-                  ) : solved && successFeedback ? (
-                    <>
-                      <strong className="success-title">
-                        ✓ {text.successResults[successFeedback.kind]}
-                      </strong>
-                      <small className="success-next">
-                        {isPhone
-                          ? answersFound === puzzle.answers.length
-                            ? text.successNextCompact
-                            : text.successMoreCompact
-                          : answersFound === puzzle.answers.length
-                            ? text.successNext
-                            : text.successMore}
-                      </small>
-                    </>
-                  ) : (
-                    text.shortHints[messageKey]
-                  )}
-                </span>
-              </div>
-              <span
-                aria-label={
-                  timerEnabled ? `${text.timer}: ${timeLeft}s` : undefined
-                }
-                className={`status-timer ${timeLeft <= 10 && timerEnabled ? "danger" : ""}`}
-              >
-                {timerEnabled ? `${timeLeft}s` : ""}
-              </span>
-            </div>
-
-            <div className="equation-viewport">
-              <DifficultyControl
-                isLoading={isLoading}
-                text={text}
-                difficulty={difficulty}
-                onDifficultyChange={changeDifficulty}
-              />
-              <div
-                ref={equationRef}
-                data-drag-hand={dragHand}
-                className={`equation ${solved && successFeedback ? `equation-solved success-${successFeedback.kind}` : ""}`}
-                aria-label={displayExpression}
-                style={
-                  {
-                    "--character-count": displayExpression.length,
-                    "--character-width-units": Array.from(
-                      displayExpression,
-                    ).reduce(
-                      (width, char) =>
-                        width + ("+-=".includes(char) ? 0.78 : 1),
-                      0,
-                    ),
-                  } as CSSProperties
-                }
-              >
-                {displayExpression.split("").map((char, position) => (
-                  <MatchstickChar
-                    key={`${position}-${char}`}
-                    char={char}
-                    position={position}
-                    rotatedClockwise={phonePortrait}
-                    directions={stickDirections[position] ?? []}
-                    solved={solved}
-                    successDestination={
-                      solved ? successFeedback?.destination : null
-                    }
-                    selected={selected}
-                    selectionActive={selected !== null}
-                    interactionLocked={interactionLocked}
-                    onSegmentClick={handleSegmentClick}
-                    canDropSegment={canDropSelectedMatchstick}
-                    onSegmentPointerDown={handleSegmentPointerDown}
-                    onSegmentPointerMove={handleSegmentPointerMove}
-                    onSegmentPointerUp={handleSegmentPointerUp}
-                    onSegmentPointerCancel={handleSegmentPointerCancel}
-                    labels={text}
-                  />
-                ))}
-                {solved && successFeedback?.kind === "complete" ? (
-                  <SuccessConfetti />
-                ) : null}
-              </div>
-              <GameControls
-                isLoading={isLoading}
-                text={text}
-                showAnswers={showAnswers}
-                listening={listening}
-                solved={solved}
-                interactionLocked={interactionLocked}
-                onNewPuzzle={startNewPuzzle}
-                onUndo={undoPuzzle}
-                onToggleAnswers={() => setShowAnswers((value) => !value)}
-                onVoiceAnswer={startVoiceAnswer}
-              />
-            </div>
-
-            {drag
-              ? createPortal(
-                  <div
-                    className={`drag-ghost ${drag.orientation} ${drag.returning ? "returning" : ""}`}
-                    aria-hidden="true"
-                    style={{
-                      left: drag.x,
-                      top: drag.y,
-                      width: drag.helperSize,
-                      height: drag.helperSize,
-                    }}
-                  >
-                    <MatchstickArt
-                      orientation="horizontal"
-                      reversed={
-                        stickDirections[drag.from.position]?.[drag.from.segment]
-                      }
-                    />
-                  </div>,
-                  document.body,
-                )
-              : null}
-          </section>
-        </div>
-      </section>
-
-      {!isPhone && (
-        <div className="bottom-row">
-          <StatsBar text={text} stats={stats} onClearStats={clearStats} />
-          <footer>
-            <span>(c) Copyright Mario Studio 2026-2027</span>
-            <a
-              href="https://github.com/KingMario/iMatchstick"
-              aria-label="GitHub"
-              title="GitHub"
-              target="_blank"
-              rel="noreferrer"
+          <h1 id="academy-welcome-title">
+            {language === "zh" ? "火柴入门学园" : "Matchstick Academy"}
+          </h1>
+          <p>
+            {language === "zh"
+              ? "从认识数字到修好第一道等式，六个小章节，慢慢玩就会了。"
+              : "Six short chapters take you from recognizing digits to fixing your first equation."}
+          </p>
+          <p>
+            {language === "zh"
+              ? "不限时，随时跳过。以后也可以从设置重新进入。"
+              : "No timer. Skip whenever you like, and return anytime from Settings."}
+          </p>
+          <div className="academy-actions">
+            <button
+              type="button"
+              data-testid="academy-begin"
+              onClick={openAcademy}
             >
-              <ActionIcon name="github" />
-            </a>
-          </footer>
-        </div>
+              {language === "zh" ? "开始学习" : "Start learning"}
+            </button>
+            <button
+              type="button"
+              data-testid="academy-skip"
+              onClick={closeAcademy}
+            >
+              {language === "zh" ? "直接挑战" : "Go to puzzles"}
+            </button>
+          </div>
+          <div className="language-switch" aria-label={text.languageLabel}>
+            <button
+              type="button"
+              aria-pressed={language === "zh"}
+              onClick={() => setLanguage("zh")}
+            >
+              中
+            </button>
+            <button
+              type="button"
+              aria-pressed={language === "en"}
+              onClick={() => setLanguage("en")}
+            >
+              EN
+            </button>
+          </div>
+        </section>
+      ) : academyView === "lessons" ? (
+        <Academy
+          language={language}
+          phonePortrait={phonePortrait}
+          dragHand={dragHand}
+          completedLessonIds={academyProgress.completedLessonIds}
+          onComplete={(id) =>
+            saveAcademyProgress({
+              ...academyProgress,
+              completedLessonIds: [
+                ...new Set([...academyProgress.completedLessonIds, id]),
+              ],
+            })
+          }
+          onExit={closeAcademy}
+        />
+      ) : (
+        <>
+          <header className="top-bar">
+            <div>
+              <p className="brand">Mario Studio</p>
+              <h1>{text.title}</h1>
+            </div>
+          </header>
+
+          <section className="game-layout">
+            <div className="play-column">
+              <section
+                className="play-area"
+                aria-label={text.puzzleLabel}
+                onClick={handlePlayAreaClick}
+                onDoubleClick={handlePlayAreaDoubleClick}
+              >
+                <div className="status-strip">
+                  <div className="status-actions">
+                    <AnswerProgress
+                      count={answersFound}
+                      total={puzzle.answers.length}
+                      label={text.answersFound}
+                      celebrate={solved && successFeedback?.kind !== "repeat"}
+                      portrait={phonePortrait}
+                      equationRef={equationRef}
+                    />
+                    <button
+                      type="button"
+                      className="settings-button"
+                      aria-label={text.settingsTitle}
+                      title={text.settingsTitle}
+                      aria-haspopup="dialog"
+                      aria-expanded={settingsOpen}
+                      onClick={() => {
+                        setShareFeedback(null);
+                        setSettingsOpen(true);
+                      }}
+                    >
+                      <ActionIcon name="settings" />
+                    </button>
+                  </div>
+                  <div className="status-copy">
+                    <strong className="status-brand">{text.title}</strong>
+                    <span
+                      className={solved ? "success" : ""}
+                      role="status"
+                      title={text[messageKey]}
+                    >
+                      {isLoading ? (
+                        text.loading
+                      ) : solved && successFeedback ? (
+                        <>
+                          <strong className="success-title">
+                            ✓ {text.successResults[successFeedback.kind]}
+                          </strong>
+                          <small className="success-next">
+                            {isPhone
+                              ? answersFound === puzzle.answers.length
+                                ? text.successNextCompact
+                                : text.successMoreCompact
+                              : answersFound === puzzle.answers.length
+                                ? text.successNext
+                                : text.successMore}
+                          </small>
+                        </>
+                      ) : (
+                        text.shortHints[messageKey]
+                      )}
+                    </span>
+                  </div>
+                  <span
+                    aria-label={
+                      timerEnabled ? `${text.timer}: ${timeLeft}s` : undefined
+                    }
+                    className={`status-timer ${timeLeft <= 10 && timerEnabled ? "danger" : ""}`}
+                  >
+                    {timerEnabled ? `${timeLeft}s` : ""}
+                  </span>
+                </div>
+
+                <div className="equation-viewport">
+                  <DifficultyControl
+                    isLoading={isLoading}
+                    text={text}
+                    difficulty={difficulty}
+                    onDifficultyChange={changeDifficulty}
+                  />
+                  <div
+                    ref={equationRef}
+                    data-drag-hand={dragHand}
+                    className={`equation ${solved && successFeedback ? `equation-solved success-${successFeedback.kind}` : ""}`}
+                    aria-label={displayExpression}
+                    style={
+                      {
+                        "--character-count": displayExpression.length,
+                        "--character-width-units": Array.from(
+                          displayExpression,
+                        ).reduce(
+                          (width, char) =>
+                            width + ("+-=".includes(char) ? 0.78 : 1),
+                          0,
+                        ),
+                      } as CSSProperties
+                    }
+                  >
+                    {displayExpression.split("").map((char, position) => (
+                      <MatchstickChar
+                        key={`${position}-${char}`}
+                        char={char}
+                        position={position}
+                        rotatedClockwise={phonePortrait}
+                        directions={stickDirections[position] ?? []}
+                        solved={solved}
+                        successDestination={
+                          solved ? successFeedback?.destination : null
+                        }
+                        selected={selected}
+                        selectionActive={selected !== null}
+                        interactionLocked={interactionLocked}
+                        onSegmentClick={handleSegmentClick}
+                        canDropSegment={canDropSelectedMatchstick}
+                        onSegmentPointerDown={handleSegmentPointerDown}
+                        onSegmentPointerMove={handleSegmentPointerMove}
+                        onSegmentPointerUp={handleSegmentPointerUp}
+                        onSegmentPointerCancel={handleSegmentPointerCancel}
+                        labels={text}
+                      />
+                    ))}
+                    {solved && successFeedback?.kind === "complete" ? (
+                      <SuccessConfetti />
+                    ) : null}
+                  </div>
+                  <GameControls
+                    isLoading={isLoading}
+                    text={text}
+                    showAnswers={showAnswers}
+                    listening={listening}
+                    solved={solved}
+                    interactionLocked={interactionLocked}
+                    onNewPuzzle={startNewPuzzle}
+                    onUndo={undoPuzzle}
+                    onToggleAnswers={() => setShowAnswers((value) => !value)}
+                    onVoiceAnswer={startVoiceAnswer}
+                  />
+                </div>
+
+                {drag
+                  ? createPortal(
+                      <div
+                        className={`drag-ghost ${drag.orientation} ${drag.returning ? "returning" : ""}`}
+                        aria-hidden="true"
+                        style={{
+                          left: drag.x,
+                          top: drag.y,
+                          width: drag.helperSize,
+                          height: drag.helperSize,
+                        }}
+                      >
+                        <MatchstickArt
+                          orientation="horizontal"
+                          reversed={
+                            stickDirections[drag.from.position]?.[
+                              drag.from.segment
+                            ]
+                          }
+                        />
+                      </div>,
+                      document.body,
+                    )
+                  : null}
+              </section>
+            </div>
+          </section>
+
+          {!isPhone && (
+            <div className="bottom-row">
+              <StatsBar text={text} stats={stats} onClearStats={clearStats} />
+              <footer>
+                <span>(c) Copyright Mario Studio 2026-2027</span>
+                <a
+                  href="https://github.com/KingMario/iMatchstick"
+                  aria-label="GitHub"
+                  title="GitHub"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <ActionIcon name="github" />
+                </a>
+              </footer>
+            </div>
+          )}
+          <GameOverlay
+            open={showAnswers}
+            title={text.answerTitle}
+            closeLabel={text.close}
+            onClose={() => setShowAnswers(false)}
+          >
+            <ol className="answer-list">
+              {puzzle.answers.map((answer) => (
+                <li key={answer}>{answer}</li>
+              ))}
+            </ol>
+          </GameOverlay>
+          <GameSettings
+            isPhone={isPhone}
+            update={pwaUpdate}
+            open={settingsOpen}
+            text={text}
+            language={language}
+            timerEnabled={timerEnabled}
+            soundEnabled={soundEnabled}
+            dragHand={dragHand}
+            onDragHandChange={setDragHand}
+            stats={stats}
+            feedback={shareFeedback ? text[shareFeedback] : ""}
+            onClose={() => setSettingsOpen(false)}
+            onLanguageChange={setLanguage}
+            onTimerChange={(enabled) => {
+              setTimerEnabled(enabled);
+              setTimeLeft(60);
+            }}
+            onSoundChange={setSoundEnabled}
+            onShare={sharePuzzle}
+            onClearStats={clearStats}
+            onOpenAcademy={openAcademy}
+          />
+          {pwaUpdate.status === "available" &&
+          !updateDismissed &&
+          !settingsOpen ? (
+            <aside className="update-notice" aria-label={text.updateAvailable}>
+              <button type="button" onClick={() => setSettingsOpen(true)}>
+                {text.updateAvailable}
+              </button>
+              <button type="button" onClick={() => setUpdateDismissed(true)}>
+                {text.updateLater}
+              </button>
+            </aside>
+          ) : null}
+        </>
       )}
-      <GameOverlay
-        open={showAnswers}
-        title={text.answerTitle}
-        closeLabel={text.close}
-        onClose={() => setShowAnswers(false)}
-      >
-        <ol className="answer-list">
-          {puzzle.answers.map((answer) => (
-            <li key={answer}>{answer}</li>
-          ))}
-        </ol>
-      </GameOverlay>
-      <GameSettings
-        isPhone={isPhone}
-        update={pwaUpdate}
-        open={settingsOpen}
-        text={text}
-        language={language}
-        timerEnabled={timerEnabled}
-        soundEnabled={soundEnabled}
-        dragHand={dragHand}
-        onDragHandChange={setDragHand}
-        stats={stats}
-        feedback={shareFeedback ? text[shareFeedback] : ""}
-        onClose={() => setSettingsOpen(false)}
-        onLanguageChange={setLanguage}
-        onTimerChange={(enabled) => {
-          setTimerEnabled(enabled);
-          setTimeLeft(60);
-        }}
-        onSoundChange={setSoundEnabled}
-        onShare={sharePuzzle}
-        onClearStats={clearStats}
-      />
-      {pwaUpdate.status === "available" && !updateDismissed && !settingsOpen ? (
-        <aside className="update-notice" aria-label={text.updateAvailable}>
-          <button type="button" onClick={() => setSettingsOpen(true)}>
-            {text.updateAvailable}
-          </button>
-          <button type="button" onClick={() => setUpdateDismissed(true)}>
-            {text.updateLater}
-          </button>
-        </aside>
-      ) : null}
     </main>
   );
 }
