@@ -1007,6 +1007,73 @@ footer a:hover {
   grid-template-rows: 44px;
 }
 
+/* Desktop sizing stays independent of the phone's rotated, single-screen board. */
+.app-shell:not(.phone-layout) .top-bar h1 {
+  font-size: 32px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.app-shell:not(.phone-layout) .play-column,
+.app-shell:not(.phone-layout) .play-area,
+.app-shell:not(.phone-layout) .equation {
+  min-width: 0;
+}
+
+.app-shell:not(.phone-layout) .equation-viewport {
+  container-type: inline-size;
+}
+
+.app-shell:not(.phone-layout) .equation {
+  --digit-width: min(
+    88px,
+    calc((100cqw - 128px) / var(--character-count) / 1.12)
+  );
+  min-height: 264px;
+  gap: calc(var(--digit-width) * 0.12);
+  overflow: hidden;
+}
+
+.app-shell:not(.phone-layout) .match-char {
+  width: var(--digit-width);
+  height: calc(var(--digit-width) * 1.93);
+}
+
+.app-shell:not(.phone-layout) .operator-char,
+.app-shell:not(.phone-layout) .equal-char {
+  width: calc(var(--digit-width) * 0.78);
+}
+
+.app-shell:not(.phone-layout) .status-copy {
+  overflow-wrap: anywhere;
+}
+
+.app-shell:not(.phone-layout) .bottom-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+
+.app-shell:not(.phone-layout) .bottom-row .stats {
+  justify-content: flex-start;
+}
+
+.app-shell:not(.phone-layout) .bottom-row footer {
+  flex: 0 1 auto;
+  margin-left: auto;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.app-shell:not(.phone-layout) .bottom-row footer a {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+}
+
 .game-overlay {
   width: min(440px, calc(100vw - 24px));
   max-height: calc(var(--game-viewport-height, 100dvh) - 24px);

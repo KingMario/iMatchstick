@@ -136,10 +136,12 @@ export function GameSettings({
           </button>
         ) : null}
       </section>
-      <section className="settings-section">
-        <h3>{text.statistics}</h3>
-        <StatsBar text={text} stats={stats} onClearStats={onClearStats} />
-      </section>
+      {isPhone && (
+        <section className="settings-section">
+          <h3>{text.statistics}</h3>
+          <StatsBar text={text} stats={stats} onClearStats={onClearStats} />
+        </section>
+      )}
       <section className="settings-section">
         <h3>{text.instructions}</h3>
         <p>{text.subtitle}</p>
@@ -164,18 +166,20 @@ export function GameSettings({
         <p>{text.dragHint}</p>
         <p>{text.continueHint}</p>
       </section>
-      <footer className="settings-footer">
-        <span>(c) Copyright Mario Studio 2026-2027</span>
-        <a
-          href="https://github.com/KingMario/iMatchstick"
-          aria-label="GitHub"
-          title="GitHub"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <ActionIcon name="github" />
-        </a>
-      </footer>
+      {isPhone && (
+        <footer className="settings-footer">
+          <span>(c) Copyright Mario Studio 2026-2027</span>
+          <a
+            href="https://github.com/KingMario/iMatchstick"
+            aria-label="GitHub"
+            title="GitHub"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ActionIcon name="github" />
+          </a>
+        </footer>
+      )}
     </GameOverlay>
   );
 }

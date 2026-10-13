@@ -9,8 +9,9 @@ import {
   useRef,
   useState,
 } from "react";
-import { copy, type Language } from "@/components/matchstick/copy";
+import { ActionIcon } from "@/components/matchstick/ActionIcon";
 import { AnswerProgress } from "@/components/matchstick/AnswerProgress";
+import { copy, type Language } from "@/components/matchstick/copy";
 import { DifficultyControl } from "@/components/matchstick/DifficultyControl";
 import { GameControls } from "@/components/matchstick/GameControls";
 import { GameOverlay } from "@/components/matchstick/GameOverlay";
@@ -853,7 +854,6 @@ export function MatchstickGame() {
         <div>
           <p className="brand">Mario Studio</p>
           <h1>{text.title}</h1>
-          <p>{text.subtitle}</p>
         </div>
       </header>
 
@@ -999,19 +999,23 @@ export function MatchstickGame() {
         </div>
       </section>
 
-      <div className="bottom-row">
-        <StatsBar text={text} stats={stats} onClearStats={clearStats} />
-        <footer>
-          <span>(c) Copyright Mario Studio 2026-2027</span>
-          <a
-            href="https://github.com/KingMario/iMatchstick"
-            target="_blank"
-            rel="noreferrer"
-          >
-            GitHub
-          </a>
-        </footer>
-      </div>
+      {!isPhone && (
+        <div className="bottom-row">
+          <StatsBar text={text} stats={stats} onClearStats={clearStats} />
+          <footer>
+            <span>(c) Copyright Mario Studio 2026-2027</span>
+            <a
+              href="https://github.com/KingMario/iMatchstick"
+              aria-label="GitHub"
+              title="GitHub"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <ActionIcon name="github" />
+            </a>
+          </footer>
+        </div>
+      )}
       <GameOverlay
         open={showAnswers}
         title={text.answerTitle}

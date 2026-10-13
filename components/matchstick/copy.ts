@@ -192,11 +192,11 @@ export const copy = {
       complete: "All answers found",
       repeat: "Correct, already found",
     },
-    successNext: "Double-tap the background for a new puzzle",
+    successNext: "Double-click the background for a new puzzle",
     successNextCompact: "Double-tap for new",
     successMoreCompact: "Undo for more · Double-tap for new",
     successMore:
-      "Undo to find other answers, or double-tap the background for a new puzzle",
+      "Undo to find other answers, or double-click the background for a new puzzle",
     version: "Version",
     checkUpdate: "Check for updates",
     updateAvailable: "Update available. View update",
