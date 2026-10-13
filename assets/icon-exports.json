@@ -1,0 +1,55 @@
+{
+  "masterSha256": "0e183ef79c96b0800f1b349538d06fe92204a84bf973d5d92911a9d150d7550f",
+  "renderer": "sharp 0.34.5",
+  "kernel": "lanczos3",
+  "faviconSharpenSigma": 0.3,
+  "maskable": {
+    "canvas": 512,
+    "artwork": [
+      116,
+      116,
+      396,
+      396
+    ],
+    "safeRadius": 204.8,
+    "background": {
+      "r": 240,
+      "g": 225,
+      "b": 200
+    }
+  },
+  "files": {
+    "icon-192.png": {
+      "sha256": "428202c663861175d9a7d007863c308532842da74eee09a0d01e14a4eed00d23",
+      "size": 192
+    },
+    "icon-512.png": {
+      "sha256": "c33d4ddfe9d58f23897386ffef07f828ca8b3c8656c2002dffa548c90cf8f4bb",
+      "size": 512
+    },
+    "favicon-16.png": {
+      "sha256": "36ca601da2a9b7cdedad4293274b330fe4850659b0676701c2dcdcaa38c6857f",
+      "size": 16
+    },
+    "favicon-32.png": {
+      "sha256": "0a7aa922a96b5ce2dc466ed7f065d9ff9186752aa9c051f99072e83c2c3c2853",
+      "size": 32
+    },
+    "favicon-48.png": {
+      "sha256": "8e4d857d903450ca4e5125f0745b6c3f2970df897f772c5e89bcc710ec5fc181",
+      "size": 48
+    },
+    "favicon.ico": {
+      "sha256": "1f17e484b41f733c57b4cf47cc6dc38191ef6a37d56e4f6dd52024960d0dcf94",
+      "sizes": [
+        16,
+        32,
+        48
+      ]
+    },
+    "icon-maskable-512.png": {
+      "sha256": "922c9a38d081d6c394d4d3976f44d2cee34724b3c89ea0866b025c8f008dc569",
+      "size": 512
+    }
+  }
+}
