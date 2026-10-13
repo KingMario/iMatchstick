@@ -258,12 +258,13 @@ async function selectHand(page: Page, language: Language, hand: Hand) {
     })
     .click();
   const dialog = page.getByRole("dialog");
-  const select = dialog.getByRole("combobox", {
+  const group = dialog.getByRole("radiogroup", {
     name: language === "zh" ? "拖拽惯用手" : "Drag hand",
     exact: true,
   });
-  await select.selectOption(hand);
-  await expect(select).toHaveValue(hand);
+  const radio = group.locator(`input[value="${hand}"]`);
+  await radio.locator("..").click();
+  await expect(radio).toBeChecked();
   // The board must move while the settings dialog is still open.
   await expectPhoneAlignment(page, hand);
   await expect
@@ -491,7 +492,7 @@ test.describe("desktop ignores saved phone handedness", () => {
             })
             .click();
           await expect(
-            page.getByRole("dialog").getByRole("combobox", {
+            page.getByRole("dialog").getByRole("radiogroup", {
               name: language === "zh" ? "拖拽惯用手" : "Drag hand",
               exact: true,
             }),

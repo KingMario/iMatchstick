@@ -1136,17 +1136,6 @@ footer a:hover {
   accent-color: var(--accent);
 }
 
-.settings-row select {
-  min-height: 44px;
-  max-width: 60%;
-  padding: 6px 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-}
-
 .settings-share {
   display: flex;
   min-height: 44px;
@@ -1602,4 +1591,65 @@ footer a:hover {
 .settings-common .language-switch button[aria-pressed="true"] {
   background: var(--accent);
   color: var(--surface);
+}
+
+/* Inline radios stay inside the rotated dialog, unlike native select popups. */
+.settings-drag-hand {
+  flex-wrap: wrap;
+  padding-block: 4px;
+}
+
+.hand-switch {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+
+.hand-switch label {
+  position: relative;
+  cursor: pointer;
+}
+
+.settings-common .hand-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+.hand-switch span {
+  display: flex;
+  min-width: 44px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+}
+
+.hand-switch input:checked + span {
+  background: var(--accent);
+  color: var(--surface);
+  border-color: currentColor;
+}
+
+.hand-switch input:focus-visible + span {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  .hand-switch input:checked + span {
+    border-color: Highlight;
+  }
+
+  .hand-switch input:focus-visible + span {
+    outline-color: Highlight;
+  }
 }

@@ -89,12 +89,12 @@ describe("grouped settings", () => {
         );
         const controls = elements(common.props.children as ReactNode);
         assert.equal(
-          controls.filter((node) => node.type === "input").length,
+          controls.filter((node) => node.props.type === "checkbox").length,
           2,
         );
         assert.equal(
-          controls.filter((node) => node.type === "select").length,
-          isPhone ? 1 : 0,
+          controls.filter((node) => node.props.type === "radio").length,
+          isPhone ? 2 : 0,
         );
         const statistics = elements(groups[1].props.children as ReactNode);
         const stats = find(statistics, (node) => node.type === StatsBar);
@@ -220,7 +220,7 @@ describe("grouped settings", () => {
     const language = nodes.filter((node) => node.type === "button");
     (language[0].props.onClick as () => void)();
     (language[1].props.onClick as () => void)();
-    const checkboxes = nodes.filter((node) => node.type === "input");
+    const checkboxes = nodes.filter((node) => node.props.type === "checkbox");
     assert.deepEqual(
       checkboxes.map((node) => node.props.checked),
       [true, false],
@@ -235,11 +235,57 @@ describe("grouped settings", () => {
         target: { checked: boolean };
       }) => void
     )({ target: { checked: true } });
-    const hand = find(nodes, (node) => node.type === "select");
-    assert.equal(hand.props.value, "left");
-    (hand.props.onChange as (event: { target: { value: string } }) => void)({
-      target: { value: "right" },
-    });
+    const hands = nodes.filter((node) => node.props.type === "radio");
+    assert.deepEqual(
+      hands.map((node) => node.props.checked),
+      [true, false],
+    );
+    (hands[1].props.onChange as () => void)();
     assert.deepEqual(changes, ["zh", "en", false, true, "right"]);
   });
 });
+
+for (const language of ["zh", "en"] as const) {
+  for (const hand of ["left", "right"] as const) {
+    it(`inline hand radios preserve semantics, labels and selection: ${language}/${hand}`, () => {
+      const changes: string[] = [];
+      const input = props({
+        language,
+        text: copy[language],
+        dragHand: hand,
+        onDragHandChange: (value) => changes.push(value),
+      });
+      const tree = GameSettings(input);
+      const nodes = elements(tree.props.children);
+      const group = find(nodes, (node) => node.props.role === "radiogroup");
+      assert.equal(group.props["aria-label"], input.text.dragHand);
+      const radios = elements(group).filter(
+        (node) => node.props.type === "radio",
+      );
+      assert.deepEqual(
+        radios.map((node) => node.props.value),
+        ["left", "right"],
+      );
+      assert.deepEqual(
+        radios.map((node) => node.props.name),
+        ["drag-hand", "drag-hand"],
+      );
+      assert.deepEqual(
+        radios.map((node) => node.props.checked),
+        [hand === "left", hand === "right"],
+      );
+      const html = renderToStaticMarkup(tree);
+      assert.doesNotMatch(html, /<select\b|<option\b/);
+      assert.ok(
+        html.includes(input.text.leftHand) &&
+          html.includes(input.text.rightHand),
+      );
+      assert.equal(
+        (html.match(/type="radio"[^>]*checked=""/g) ?? []).length,
+        1,
+      );
+      for (const radio of radios) (radio.props.onChange as () => void)();
+      assert.deepEqual(changes, ["left", "right"]);
+    });
+  }
+}

@@ -59,7 +59,7 @@ for (const language of ["zh", "en"] as const) {
             exact: true,
           }),
         ).toBeVisible();
-        await expect(common.getByRole("combobox")).toHaveCount(
+        await expect(common.getByRole("radiogroup")).toHaveCount(
           device.isMobile ? 1 : 0,
         );
         await expect(dialog.locator("details")).toHaveCount(3);
@@ -124,8 +124,9 @@ test("settings disclosures support keyboard, language changes and reopen without
   await dialog.getByRole("checkbox", { name: "计时", exact: true }).check();
   await dialog.getByRole("checkbox", { name: "音效", exact: true }).check();
   await dialog
-    .getByRole("combobox", { name: "拖拽惯用手", exact: true })
-    .selectOption("left");
+    .getByRole("radiogroup", { name: "拖拽惯用手", exact: true })
+    .getByText("左手拖拽", { exact: true })
+    .click();
   await dialog.getByRole("button", { name: "EN", exact: true }).click();
   await expect(
     dialog.getByRole("heading", { name: "Settings", exact: true }),
@@ -149,8 +150,8 @@ test("settings disclosures support keyboard, language changes and reopen without
     dialog.getByRole("checkbox", { name: "Sound", exact: true }),
   ).toBeChecked();
   await expect(
-    dialog.getByRole("combobox", { name: "Drag hand", exact: true }),
-  ).toHaveValue("left");
+    dialog.getByRole("radio", { name: "Left hand", exact: true }),
+  ).toBeChecked();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -173,6 +174,6 @@ test("settings disclosures support keyboard, language changes and reopen without
     dialog.getByRole("checkbox", { name: "Sound", exact: true }),
   ).toBeChecked();
   await expect(
-    dialog.getByRole("combobox", { name: "Drag hand", exact: true }),
-  ).toHaveValue("left");
+    dialog.getByRole("radio", { name: "Left hand", exact: true }),
+  ).toBeChecked();
 });

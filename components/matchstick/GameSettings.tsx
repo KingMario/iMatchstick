@@ -81,20 +81,29 @@ export function GameSettings({
           </div>
         </div>
         {isPhone && (
-          <label className="settings-row">
+          <div className="settings-row settings-drag-hand">
             <span>{text.dragHand}</span>
-            <select
-              value={dragHand}
-              onChange={(event) =>
-                onDragHandChange(
-                  event.target.value === "left" ? "left" : "right",
-                )
-              }
+            <div
+              className="hand-switch"
+              role="radiogroup"
+              aria-label={text.dragHand}
             >
-              <option value="left">{text.leftHand}</option>
-              <option value="right">{text.rightHand}</option>
-            </select>
-          </label>
+              {(["left", "right"] as const).map((hand) => (
+                <label key={hand}>
+                  <input
+                    type="radio"
+                    name="drag-hand"
+                    value={hand}
+                    checked={dragHand === hand}
+                    onChange={() => onDragHandChange(hand)}
+                  />
+                  <span>
+                    {hand === "left" ? text.leftHand : text.rightHand}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
         )}
         <label className="settings-row">
           <span>{text.timer}</span>
