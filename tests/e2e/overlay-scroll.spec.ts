@@ -11,11 +11,11 @@ test("portrait dialog scrolling follows the rotated content axis", async ({
   const rect = (await body.boundingBox())!;
   const cdp = await context.newCDPSession(page);
   try {
-    for (const { dx, dy, expected } of [
-      { dx: 80, dy: 0, expected: 280 },
-      { dx: -80, dy: 0, expected: 120 },
-      { dx: 0, dy: -80, expected: 200 },
-      { dx: 0, dy: 80, expected: 200 },
+    for (const { dx, dy, direction } of [
+      { dx: 80, dy: 0, direction: 1 },
+      { dx: -80, dy: 0, direction: -1 },
+      { dx: 0, dy: -80, direction: 0 },
+      { dx: 0, dy: 80, direction: 0 },
     ]) {
       await body.evaluate((element) => {
         element.scrollTop = 200;
@@ -32,13 +32,21 @@ test("portrait dialog scrolling follows the rotated content axis", async ({
           touchPoints: [{ x: x + (dx * i) / 8, y: y + (dy * i) / 8 }],
         });
       }
+      // Assert direction during the drag, not a fixed post-release offset:
+      // native scrolling has a touch slop threshold and may continue with inertia.
+      if (direction) {
+        await expect
+          .poll(() => body.evaluate((element) => element.scrollTop))
+          [direction > 0 ? "toBeGreaterThan" : "toBeLessThan"](200);
+      } else {
+        await expect
+          .poll(() => body.evaluate((element) => element.scrollTop))
+          .toBeCloseTo(200, 0);
+      }
       await cdp.send("Input.dispatchTouchEvent", {
-        type: "touchEnd",
+        type: "touchCancel",
         touchPoints: [],
       });
-      await expect
-        .poll(() => body.evaluate((element) => element.scrollTop))
-        .toBeCloseTo(expected, 0);
     }
     await body.evaluate((element) => {
       element.scrollTop = 200;
@@ -82,4 +90,67 @@ test("portrait dialog scrolling follows the rotated content axis", async ({
   } finally {
     await cdp.detach();
   }
+});
+
+test("native touch gestures are not canceled or manually scrolled", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto("/?puzzle=7-5%3D3");
+  const opener = page.locator(".play-controls button").last();
+  await opener.tap();
+  const body = page.locator("dialog[open] .overlay-body");
+  await expect(body).toHaveCSS("overflow-y", "auto");
+  const result = await body.evaluate((element) => {
+    const actions: string[] = [];
+    for (let node: Element | null = element; node; node = node.parentElement) {
+      actions.push(getComputedStyle(node).touchAction);
+    }
+    element.scrollTop = 100;
+    const touch = (x: number) =>
+      new Touch({ identifier: 1, target: element, clientX: x, clientY: 150 });
+    const start = touch(100);
+    element.dispatchEvent(
+      new TouchEvent("touchstart", {
+        bubbles: true,
+        cancelable: true,
+        touches: [start],
+      }),
+    );
+    const move = new TouchEvent("touchmove", {
+      bubbles: true,
+      cancelable: true,
+      touches: [touch(180)],
+    });
+    element.dispatchEvent(move);
+    element.dispatchEvent(
+      new TouchEvent("touchend", {
+        bubbles: true,
+        cancelable: true,
+        touches: [],
+      }),
+    );
+    return {
+      actions,
+      canceled: move.defaultPrevented,
+      scroll: element.scrollTop,
+    };
+  });
+  expect(result.actions).not.toContain("none");
+  expect(result.canceled).toBe(false);
+  // Synthetic DOM events do not trigger the browser's native scrolling. Any
+  // offset here would expose a reintroduced JavaScript touch-scroll takeover.
+  expect(result.scroll).toBe(100);
+  await page.keyboard.press("Escape");
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await opener.tap();
+  await expect
+    .poll(() => body.evaluate((element) => element.scrollTop))
+    .toBe(100);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await expect(body).toHaveCSS("overflow-y", "auto");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("dialog[open]")).toHaveCount(0);
+  await expect(opener).toBeFocused();
 });

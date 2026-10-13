@@ -1378,10 +1378,6 @@ footer a:hover {
   transform: translate(-50%, -50%) rotate(90deg);
 }
 
-.is-phone-portrait .overlay-body {
-  touch-action: none;
-}
-
 .phone-layout .play-controls {
   flex-direction: row;
 }
