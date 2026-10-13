@@ -7,6 +7,10 @@ test("portrait dialog scrolling follows the rotated content axis", async ({
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/?puzzle=7-5%3D3");
   await page.locator(".play-controls button").last().tap();
+  await page
+    .locator("dialog[open] summary")
+    .filter({ hasText: "玩法说明" })
+    .tap();
   const body = page.locator("dialog[open] .overlay-body");
   const rect = (await body.boundingBox())!;
   const cdp = await context.newCDPSession(page);
@@ -99,6 +103,10 @@ test("native touch gestures are not canceled or manually scrolled", async ({
   await page.goto("/?puzzle=7-5%3D3");
   const opener = page.locator(".play-controls button").last();
   await opener.tap();
+  await page
+    .locator("dialog[open] summary")
+    .filter({ hasText: "玩法说明" })
+    .tap();
   const body = page.locator("dialog[open] .overlay-body");
   await expect(body).toHaveCSS("overflow-y", "auto");
   const result = await body.evaluate((element) => {

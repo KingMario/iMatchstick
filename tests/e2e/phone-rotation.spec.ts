@@ -109,6 +109,10 @@ test("portrait More scrolls with touch in its rotated direction", async ({
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/?puzzle=7-5%3D3");
   await page.locator(".play-controls button").last().tap();
+  await page
+    .locator("dialog[open] summary")
+    .filter({ hasText: "玩法说明" })
+    .tap();
   const body = page.locator("dialog[open] .overlay-body");
   const rect = (await body.boundingBox())!;
   const cdp = await context.newCDPSession(page);
@@ -201,6 +205,12 @@ for (const language of ["zh", "en"]) {
       ).toBeFocused();
       await page.keyboard.press("Shift+Tab");
       await expect(close).toBeFocused();
+      await dialog
+        .locator("summary")
+        .filter({
+          hasText: language === "zh" ? "关于与版本" : "About & version",
+        })
+        .tap();
       await dialog.locator(".overlay-body").evaluate((element) => {
         element.scrollTop = element.scrollHeight;
       });

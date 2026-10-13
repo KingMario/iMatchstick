@@ -7,8 +7,13 @@
     "noEmit": false,
     "outDir": ".test-out",
     "rootDir": ".",
-    "types": ["node"]
+    "types": ["node"],
+    "jsx": "react-jsx"
   },
-  "include": ["lib/**/*.ts"],
+  "include": [
+    "lib/**/*.ts",
+    "components/matchstick/**/*.tsx",
+    "components/matchstick/**/*.ts"
+  ],
   "exclude": ["node_modules", ".next", "out", ".test-out"]
 }

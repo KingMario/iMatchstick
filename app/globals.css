@@ -340,13 +340,27 @@ h1 {
   font-weight: 850;
 }
 
-.status-strip span:nth-child(2) {
-  text-align: center;
-  white-space: normal;
+/* Keep progress at the top-right of the shared board header, clear of the
+   equation's side controls. Portrait phones rotate this entire layout together. */
+.status-strip > * {
+  grid-row: 1;
 }
 
-.status-strip span:nth-child(3) {
-  text-align: right;
+.status-strip .answer-progress {
+  grid-column: 3;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.status-strip .status-copy {
+  grid-column: 2;
+}
+
+.status-strip .status-timer {
+  grid-column: 1;
+  justify-self: start;
+  text-align: left;
+  white-space: nowrap;
 }
 
 .danger {
@@ -855,7 +869,10 @@ footer a:hover {
   min-height: 0;
   grid-column: 1 / -1;
   grid-row: 1;
-  grid-template-columns: 30px minmax(0, 1fr) 38px;
+  grid-template-columns: minmax(38px, max-content) minmax(0, 1fr) minmax(
+      30px,
+      max-content
+    );
   gap: 4px;
   margin: 0;
   font-size: 12px;
@@ -1398,4 +1415,139 @@ footer a:hover {
 .phone-portrait .update-notice {
   top: max(8px, env(safe-area-inset-right));
   right: max(8px, env(safe-area-inset-bottom));
+}
+
+/* Settings share the same landscape reading layout on phones and desktop. */
+.settings-overlay {
+  width: min(600px, calc(100vw - 24px));
+}
+
+.is-phone-game .settings-overlay {
+  width: min(
+    600px,
+    calc(
+      var(--game-viewport-width, 100vw) - 24px - env(safe-area-inset-left) -
+        env(safe-area-inset-right)
+    )
+  );
+}
+
+.is-phone-portrait .settings-overlay {
+  width: min(
+    600px,
+    calc(
+      var(--game-viewport-height, 100dvh) - 24px - env(safe-area-inset-top) -
+        env(safe-area-inset-bottom)
+    )
+  );
+}
+
+.settings-common {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 24px;
+  margin-bottom: 12px;
+}
+
+.settings-common .settings-row {
+  min-width: 0;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.settings-language-wide {
+  grid-column: 1 / -1;
+}
+
+.settings-common .language-switch {
+  flex-shrink: 0;
+  border-radius: 8px;
+  border-width: 1px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.settings-common .language-switch button {
+  border-radius: 6px;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.settings-common .settings-row input {
+  flex-shrink: 0;
+}
+
+.settings-panel {
+  border-top: 1px solid var(--border-soft);
+}
+
+.settings-panel > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 0;
+  font-size: 18px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+
+.settings-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-panel > summary::after {
+  content: "";
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.settings-panel[open] > summary::after {
+  transform: rotate(135deg);
+}
+
+.settings-panel > .settings-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.settings-panel-content,
+.settings-panel > .settings-section {
+  padding-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+
+.settings-panel .stats {
+  flex-wrap: wrap;
+}
+
+.settings-panel > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.settings-update {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+}
+
+.settings-update p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.settings-common .language-switch button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--surface);
 }

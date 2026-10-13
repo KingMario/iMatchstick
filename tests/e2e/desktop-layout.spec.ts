@@ -38,8 +38,8 @@ test.describe("desktop presentation", () => {
           "10-80=100",
         );
         await expect(page.locator(".phone-layout")).toHaveCount(0);
-        await expect(page.locator(".stats")).toHaveCount(1);
-        await expect(page.locator("footer")).toHaveCount(1);
+        await expect(page.locator(".bottom-row .stats")).toHaveCount(1);
+        await expect(page.locator(".bottom-row footer")).toHaveCount(1);
         const github = page.getByRole("link", { name: "GitHub", exact: true });
         await expect(github).toHaveCount(1);
         await expect(github).toHaveAttribute(
@@ -104,7 +104,10 @@ test.describe("desktop presentation", () => {
           .click();
         const dialog = page.getByRole("dialog");
         await expect(dialog).toBeVisible();
-        await expect(dialog.locator(".stats, footer")).toHaveCount(0);
+        await expect(dialog.locator("details")).toHaveCount(3);
+        await expect(dialog.locator("details[open]")).toHaveCount(0);
+        await expect(dialog.locator(".stats")).toBeHidden();
+        await expect(dialog.locator("footer")).toBeHidden();
         await expect(dialog.getByRole("link", { name: "GitHub" })).toHaveCount(
           0,
         );
@@ -163,11 +166,9 @@ test.describe("desktop presentation", () => {
         "aria-label",
         "7-5=2",
       );
-      await expect(page.locator(".stats .stat-item strong")).toHaveText([
-        "1",
-        "1",
-        "0",
-      ]);
+      await expect(
+        page.locator(".bottom-row .stats .stat-item strong"),
+      ).toHaveText(["1", "1", "0"]);
       await page.getByRole("button", { name: "Undo", exact: true }).click();
       await expect(page.locator(".equation")).toHaveAttribute(
         "aria-label",
@@ -180,7 +181,7 @@ test.describe("desktop presentation", () => {
       });
       await expect(page.locator(".phone-layout")).toHaveCount(0);
       await expect(page.locator(".bottom-row .stats")).toBeVisible();
-      await expect(page.locator("footer")).toHaveCount(1);
+      await expect(page.locator(".bottom-row footer")).toHaveCount(1);
     });
   }
 
@@ -196,11 +197,9 @@ test.describe("desktop presentation", () => {
     await expect(page.locator(".success-next")).toHaveText(
       "Double-click the background for a new puzzle",
     );
-    await expect(page.locator(".stats .stat-item strong")).toHaveText([
-      "1",
-      "1",
-      "0",
-    ]);
+    await expect(
+      page.locator(".bottom-row .stats .stat-item strong"),
+    ).toHaveText(["1", "1", "0"]);
     const labels = [
       "Increase difficulty group",
       "Decrease difficulty group",
@@ -227,26 +226,16 @@ test.describe("desktop presentation", () => {
       exact: true,
     });
     await reset.click();
-    await expect(page.locator(".stats .stat-item strong")).toHaveText([
-      "0",
-      "0",
-      "0",
-    ]);
+    await expect(
+      page.locator(".bottom-row .stats .stat-item strong"),
+    ).toHaveText(["0", "0", "0"]);
     const more = page.getByRole("button", { name: "More", exact: true });
     await more.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
     const close = dialog.getByRole("button", { name: "Close", exact: true });
     await expect(close).toBeFocused();
-    const sequence = [
-      "中",
-      "EN",
-      "Timer",
-      "Sound",
-      "Share puzzle",
-      "Add to Home Screen",
-      "Check for updates",
-    ];
+    const sequence = ["中", "EN", "Timer", "Sound"];
     for (const name of sequence) {
       await page.keyboard.press("Tab");
       await expect(
@@ -254,6 +243,12 @@ test.describe("desktop presentation", () => {
           name === "Timer" || name === "Sound" ? "checkbox" : "button",
           { name, exact: true },
         ),
+      ).toBeFocused();
+    }
+    for (const label of ["How to play", "Statistics", "About & version"]) {
+      await page.keyboard.press("Tab");
+      await expect(
+        dialog.locator("summary").filter({ hasText: label }),
       ).toBeFocused();
     }
     await page.keyboard.press("Tab");
@@ -267,7 +262,7 @@ test.describe("desktop presentation", () => {
       await page.keyboard.press("Shift+Tab");
     }
     await expect(
-      dialog.getByRole("button", { name: "Check for updates", exact: true }),
+      dialog.locator("summary").filter({ hasText: "About & version" }),
     ).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(more).toBeFocused();
@@ -307,6 +302,17 @@ test.describe("phone presentation", () => {
         const label = language === "zh" ? "更多" : "More";
         await page.getByRole("button", { name: label, exact: true }).tap();
         const dialog = page.getByRole("dialog");
+        await expect(dialog.locator("details[open]")).toHaveCount(0);
+        await dialog
+          .locator("summary")
+          .filter({ hasText: language === "zh" ? "游戏统计" : "Statistics" })
+          .tap();
+        await dialog
+          .locator("summary")
+          .filter({
+            hasText: language === "zh" ? "关于与版本" : "About & version",
+          })
+          .tap();
         await expect(page.locator(".stats")).toHaveCount(1);
         await expect(dialog.locator(".stats .stat-item strong")).toHaveText([
           "1",

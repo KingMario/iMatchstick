@@ -63,8 +63,10 @@ export const copy = {
     leftHand: "左手拖拽",
     rightHand: "右手拖拽",
     close: "关闭",
-    statistics: "统计",
-    instructions: "玩法",
+    settingsTitle: "设置",
+    aboutVersion: "关于与版本",
+    statistics: "游戏统计",
+    instructions: "玩法说明",
     levelHint:
       "级别共 0–8 级，按数字位数和火柴移动方式划分。横屏（或电脑浏览器屏幕）时，上箭头提升级别，下箭头降低级别；手机竖屏时，左箭头降低级别，右箭头提升级别。游戏会按所选级别重新出题，切换级别不计为跳过。",
     answerIconHint: "钥匙按钮：查看本题的可行答案。",
@@ -219,6 +221,8 @@ export const copy = {
     leftHand: "Left hand",
     rightHand: "Right hand",
     close: "Close",
+    settingsTitle: "Settings",
+    aboutVersion: "About & version",
     statistics: "Statistics",
     instructions: "How to play",
     levelHint:

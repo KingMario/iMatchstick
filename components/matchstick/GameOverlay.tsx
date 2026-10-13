@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useId, useRef } from "react";
 
 type GameOverlayProps = {
+  className?: string;
   open: boolean;
   title: string;
   closeLabel: string;
@@ -9,6 +10,7 @@ type GameOverlayProps = {
 };
 
 export function GameOverlay({
+  className,
   open,
   title,
   closeLabel,
@@ -56,7 +58,7 @@ export function GameOverlay({
   return (
     <dialog
       ref={ref}
-      className="game-overlay"
+      className={["game-overlay", className].filter(Boolean).join(" ")}
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();

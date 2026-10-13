@@ -22,6 +22,10 @@ for (const [agent, expected] of [
     );
     await page.goto("/?puzzle=7-5%3D3");
     await page.getByRole("button", { name: "更多", exact: true }).tap();
+    await page
+      .locator("dialog[open] summary")
+      .filter({ hasText: "关于与版本" })
+      .tap();
     await page.getByRole("button", { name: "创建桌面书签", exact: true }).tap();
     await expect(page.locator(".install-steps li").first()).toHaveText(
       expected,
@@ -70,6 +74,10 @@ for (const outcome of [
       await page.locator("html").getAttribute("data-install-prompts"),
     ).toBeNull();
     await page.getByRole("button", { name: "更多", exact: true }).tap();
+    await page
+      .locator("dialog[open] summary")
+      .filter({ hasText: "关于与版本" })
+      .tap();
     await page.getByRole("button", { name: "创建桌面书签", exact: true }).tap();
     await expect(page.locator("html")).toHaveAttribute(
       "data-install-prompts",
@@ -107,6 +115,10 @@ test("iOS home-screen launch shows installed state", async ({ page }) => {
   );
   await page.goto("/?puzzle=7-5%3D3");
   await page.getByRole("button", { name: "更多", exact: true }).tap();
+  await page
+    .locator("dialog[open] summary")
+    .filter({ hasText: "关于与版本" })
+    .tap();
   await expect(
     page.getByRole("button", { name: "已添加到桌面", exact: true }),
   ).toBeDisabled();

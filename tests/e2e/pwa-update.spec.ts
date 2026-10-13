@@ -78,6 +78,10 @@ test("production updates wait for consent and retain old gameplay until reload",
     const address = server.address() as { port: number };
     await page.goto(`http://127.0.0.1:${address.port}/?puzzle=7-5%3D3`);
     await page.getByRole("button", { name: "更多", exact: true }).tap();
+    await page
+      .locator("dialog[open] summary")
+      .filter({ hasText: "关于与版本" })
+      .tap();
     await expect(
       page.getByText("检查失败，请确认网络后重试。", { exact: true }),
     ).toBeVisible();
@@ -107,6 +111,8 @@ test("production updates wait for consent and retain old gameplay until reload",
     );
     await page.getByRole("button", { name: "更多", exact: true }).tap();
     await page.getByRole("button", { name: "EN", exact: true }).tap();
+    await page.locator("dialog[open] details[open] summary").tap();
+    await expect(page.locator("dialog[open] details[open]")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Update and reload" }),
     ).toBeVisible();
@@ -116,6 +122,10 @@ test("production updates wait for consent and retain old gameplay until reload",
       "new",
     );
     await page.getByRole("button", { name: "More", exact: true }).tap();
+    await page
+      .locator("dialog[open] summary")
+      .filter({ hasText: "About & version" })
+      .tap();
     offline = true;
     await page.getByRole("button", { name: "Check for updates" }).tap();
     await expect(

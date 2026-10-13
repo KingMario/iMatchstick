@@ -8,7 +8,7 @@
     "lint": "eslint .",
     "test:e2e": "playwright test",
     "generate:puzzles": "node scripts/generate-puzzle-book.mjs",
-    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/*.test.js scripts/*.test.mjs",
+    "test": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test .test-out/lib/*.test.js .test-out/components/matchstick/*.test.js scripts/*.test.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

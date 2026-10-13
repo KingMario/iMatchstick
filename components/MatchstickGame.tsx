@@ -932,7 +932,7 @@ export function MatchstickGame() {
                 aria-label={
                   timerEnabled ? `${text.timer}: ${timeLeft}s` : undefined
                 }
-                className={timeLeft <= 10 && timerEnabled ? "danger" : ""}
+                className={`status-timer ${timeLeft <= 10 && timerEnabled ? "danger" : ""}`}
               >
                 {timerEnabled ? `${timeLeft}s` : ""}
               </span>

@@ -1,0 +1,178 @@
+import { expect, test } from "@playwright/test";
+
+for (const language of ["zh", "en"] as const) {
+  for (const device of [
+    { name: "desktop", width: 1280, height: 800, isMobile: false },
+    { name: "mid desktop", width: 768, height: 1024, isMobile: false },
+    { name: "narrow desktop", width: 320, height: 568, isMobile: false },
+    { name: "landscape phone", width: 568, height: 320, isMobile: true },
+    { name: "portrait phone", width: 320, height: 568, isMobile: true },
+  ]) {
+    test(`grouped settings stay contained: ${language}, ${device.name}`, async ({
+      browser,
+      baseURL,
+    }) => {
+      const context = await browser.newContext({
+        baseURL,
+        viewport: { width: device.width, height: device.height },
+        isMobile: device.isMobile,
+        hasTouch: device.isMobile,
+      });
+      try {
+        const page = await context.newPage();
+        await page.addInitScript((language) => {
+          localStorage.setItem(
+            "imatchstick-pwa-settings",
+            JSON.stringify({
+              language,
+              difficulty: "level0",
+              timerEnabled: false,
+              soundEnabled: false,
+            }),
+          );
+        }, language);
+        await page.goto("/?puzzle=7-5%3D3");
+        await page
+          .getByRole("button", {
+            name: language === "zh" ? "更多" : "More",
+            exact: true,
+          })
+          .click();
+        const dialog = page.getByRole("dialog", {
+          name: language === "zh" ? "设置" : "Settings",
+          exact: true,
+        });
+        await expect(dialog).toBeVisible();
+        const common = dialog.locator(".settings-common");
+        await expect(
+          common.getByRole("button", { name: "EN", exact: true }),
+        ).toBeVisible();
+        await expect(
+          common.getByRole("checkbox", {
+            name: language === "zh" ? "计时" : "Timer",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(
+          common.getByRole("checkbox", {
+            name: language === "zh" ? "音效" : "Sound",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(common.getByRole("combobox")).toHaveCount(
+          device.isMobile ? 1 : 0,
+        );
+        await expect(dialog.locator("details")).toHaveCount(3);
+        await expect(dialog.locator("details[open]")).toHaveCount(0);
+        await expect(dialog.locator("summary")).toHaveText(
+          language === "zh"
+            ? ["玩法说明", "游戏统计", "关于与版本"]
+            : ["How to play", "Statistics", "About & version"],
+        );
+        await expect(dialog.locator(".stats")).toBeHidden();
+        await expect(dialog.locator(".install-shortcut")).toBeHidden();
+        await expect(dialog.locator(".settings-footer")).toBeHidden();
+        // Exercise every panel and verify content never causes horizontal overflow.
+        for (const summary of await dialog.locator("summary").all()) {
+          await summary.click();
+        }
+        await expect(dialog.locator("details[open]")).toHaveCount(3);
+        expect(
+          await dialog
+            .locator(".overlay-body")
+            .evaluate((body) => body.scrollWidth <= body.clientWidth + 1),
+        ).toBe(true);
+        if (device.isMobile) {
+          // Both phone orientations share the landscape reading width.
+          await expect(dialog).toHaveCSS("width", "544px");
+        }
+        const bounds = (await dialog.boundingBox())!;
+        expect(bounds.x).toBeGreaterThanOrEqual(-1);
+        expect(bounds.y).toBeGreaterThanOrEqual(-1);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(device.width + 1);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(device.height + 1);
+        await expect(dialog.locator(".overlay-close")).toBeVisible();
+        await dialog.locator(".overlay-close").click();
+        await expect(dialog).toBeHidden();
+      } finally {
+        await context.close();
+      }
+    });
+  }
+}
+
+test("settings disclosures support keyboard, language changes and reopen without resetting controls", async ({
+  page,
+}) => {
+  await page.goto("/?puzzle=7-5%3D3");
+  await page.getByRole("button", { name: "更多", exact: true }).click();
+  const dialog = page.locator("dialog[open]");
+  const panels = dialog.locator("details");
+  const help = panels.nth(0);
+  const summary = help.locator("summary");
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect(help).toHaveAttribute("open", "");
+  await page.keyboard.press("Space");
+  await expect(help).not.toHaveAttribute("open");
+  await page.keyboard.press("Enter");
+  await panels.nth(1).locator("summary").click();
+  await expect(panels.nth(1)).toHaveAttribute("open", "");
+  await expect(
+    dialog.getByRole("button", { name: "清零统计", exact: true }),
+  ).toBeVisible();
+  await dialog.getByRole("checkbox", { name: "计时", exact: true }).check();
+  await dialog.getByRole("checkbox", { name: "音效", exact: true }).check();
+  await dialog
+    .getByRole("combobox", { name: "拖拽惯用手", exact: true })
+    .selectOption("left");
+  await dialog.getByRole("button", { name: "EN", exact: true }).click();
+  await expect(
+    dialog.getByRole("heading", { name: "Settings", exact: true }),
+  ).toBeVisible();
+  await expect(dialog.locator("summary")).toHaveText([
+    "How to play",
+    "Statistics",
+    "About & version",
+  ]);
+  await expect(help).toHaveAttribute("open", "");
+  await expect(panels.nth(2)).not.toHaveAttribute("open");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await expect(help).toHaveAttribute("open", "");
+  await expect(panels.nth(1)).toHaveAttribute("open", "");
+  await expect(panels.nth(2)).not.toHaveAttribute("open");
+  await expect(
+    dialog.getByRole("checkbox", { name: "Timer", exact: true }),
+  ).toBeChecked();
+  await expect(
+    dialog.getByRole("checkbox", { name: "Sound", exact: true }),
+  ).toBeChecked();
+  await expect(
+    dialog.getByRole("combobox", { name: "Drag hand", exact: true }),
+  ).toHaveValue("left");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        JSON.parse(localStorage.getItem("imatchstick-pwa-settings")!),
+      ),
+    )
+    .toMatchObject({
+      language: "en",
+      timerEnabled: true,
+      soundEnabled: true,
+      dragHand: "left",
+    });
+  await page.reload();
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await expect(dialog.locator("details[open]")).toHaveCount(0);
+  await expect(
+    dialog.getByRole("checkbox", { name: "Timer", exact: true }),
+  ).toBeChecked();
+  await expect(
+    dialog.getByRole("checkbox", { name: "Sound", exact: true }),
+  ).toBeChecked();
+  await expect(
+    dialog.getByRole("combobox", { name: "Drag hand", exact: true }),
+  ).toHaveValue("left");
+});
