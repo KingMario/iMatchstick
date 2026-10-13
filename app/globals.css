@@ -409,15 +409,28 @@ h1 {
   height: calc(var(--digit-width) * 1.93);
 }
 
-/* Keep the existing width, glyph sizing and 64px control reserves. Only align
-   the full character group inside that corridor, leaving a 12px control gap.
-   Portrait rotates this same logical landscape layout without a second reflow. */
-.phone-layout .equation[data-drag-hand="left"] {
-  justify-content: flex-end;
+/* Translate only glyphs from their original centered positions. The corridor
+   and every glyph/hit target retain their dimensions. 192/240 is a conservative
+   visible-ink length within the horizontal artwork (not its transparent SVG
+   box or stroke thickness). The 64px reserves retain the 12px control gap.
+   Portrait rotates this same logical layout, including this translation. */
+.phone-layout .equation {
+  --group-width: calc(
+    var(--digit-width) * var(--character-width-units) + var(--digit-width) *
+      0.12 * (var(--character-count) - 1)
+  );
+  --hand-offset: min(
+    calc(var(--match-length) * 192 / 240),
+    max(0px, calc((100cqw - 128px - var(--group-width)) / 2))
+  );
 }
 
-.phone-layout .equation[data-drag-hand="right"] {
-  justify-content: flex-start;
+.phone-layout .equation[data-drag-hand="left"] > .match-char {
+  transform: translateX(var(--hand-offset));
+}
+
+.phone-layout .equation[data-drag-hand="right"] > .match-char {
+  transform: translateX(calc(-1 * var(--hand-offset)));
 }
 
 .phone-layout .operator-char,

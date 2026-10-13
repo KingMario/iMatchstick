@@ -163,7 +163,7 @@ async function expectPhoneAlignment(page: Page, hand: Hand) {
   const { aligned, centered } = await measureAlignment(page);
   const actual = logicalLayout(aligned);
   const baseline = logicalLayout(centered);
-  expect(actual.justify).toBe(hand === "left" ? "flex-end" : "flex-start");
+  expect(actual.justify).toBe("center");
   expect(baseline.justify).toBe("center");
   expect(actual.paddingLeft).toBe(64);
   expect(actual.paddingRight).toBe(64);
@@ -200,17 +200,28 @@ async function expectPhoneAlignment(page: Page, hand: Hand) {
   const rightGap = actual.controls.x - actual.group.x - actual.group.width;
   expect(leftGap).toBeGreaterThanOrEqual(11.95);
   expect(rightGap).toBeGreaterThanOrEqual(11.95);
-  if (hand === "left") {
-    expect(dx).toBeGreaterThan(1);
-    expect(actual.group.x + actual.group.width).toBeCloseTo(
-      actual.board.x + actual.board.width - actual.paddingRight,
-      1,
+  const visibleLengthCap = (baseline.characters[0].width * 0.72 * 192) / 240;
+  const freeSpace = Math.max(
+    0,
+    (baseline.board.width - 128 - baseline.group.width) / 2,
+  );
+  const magnitude = Math.min(visibleLengthCap, freeSpace);
+  // Layout quantizes each glyph/gap independently; permit subpixel accumulation.
+  expect(Math.abs(dx - (hand === "left" ? 1 : -1) * magnitude)).toBeLessThan(
+    0.2,
+  );
+  expect(Math.abs(dx)).toBeLessThanOrEqual(visibleLengthCap + 0.05);
+  // Compare against the actual SVG ink, not the larger segment hit target.
+  const horizontalInk = baseline.sticks.filter(
+    (rect) => rect.width > rect.height,
+  );
+  expect(horizontalInk.some((rect) => rect.width >= Math.abs(dx) - 0.05)).toBe(
+    true,
+  );
+  if (freeSpace < visibleLengthCap) {
+    expect(Math.abs((hand === "left" ? rightGap : leftGap) - 12)).toBeLessThan(
+      0.2,
     );
-    expect(rightGap).toBeCloseTo(12, 1);
-  } else {
-    expect(dx).toBeLessThan(-1);
-    expect(actual.group.x).toBeCloseTo(actual.board.x + actual.paddingLeft, 1);
-    expect(leftGap).toBeCloseTo(12, 1);
   }
   for (const rect of [
     ...actual.characters,
@@ -269,6 +280,35 @@ async function selectHand(page: Page, language: Language, hand: Hand) {
 
 test.describe("phone handedness alignment", () => {
   test.use({ isMobile: true, hasTouch: true });
+
+  test("exhausted corridor adds no offset or further overflow", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 640, height: 360 });
+    await prepare(page, puzzles[0], "en");
+    for (const extraWidth of [0, 10]) {
+      await page.locator(".equation").evaluate((equation, extra) => {
+        const element = equation as HTMLElement;
+        const units = parseFloat(
+          element.style.getPropertyValue("--character-width-units"),
+        );
+        const count = parseFloat(
+          element.style.getPropertyValue("--character-count"),
+        );
+        element.style.setProperty(
+          "--digit-width",
+          `calc((100cqw - 128px + ${extra}px) / ${units + (count - 1) * 0.12})`,
+        );
+      }, extraWidth);
+      for (const hand of ["left", "right"] as const) {
+        await page.locator(".equation").evaluate((element, value) => {
+          element.setAttribute("data-drag-hand", value);
+        }, hand);
+        const { aligned, centered } = await measureAlignment(page);
+        expectSameLayout(aligned, centered);
+      }
+    }
+  });
 
   for (const language of ["zh", "en"] as const) {
     for (const viewport of landscapeSizes) {

@@ -953,6 +953,13 @@ export function MatchstickGame() {
                 style={
                   {
                     "--character-count": displayExpression.length,
+                    "--character-width-units": Array.from(
+                      displayExpression,
+                    ).reduce(
+                      (width, char) =>
+                        width + ("+-=".includes(char) ? 0.78 : 1),
+                      0,
+                    ),
                   } as CSSProperties
                 }
               >
