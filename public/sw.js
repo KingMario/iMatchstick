@@ -18,12 +18,22 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)),
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(
+        APP_SHELL.map(
+          (path) =>
+            new Request(new URL(path, self.location.href), {
+              cache: "no-store",
+            }),
+        ),
+      ),
+    ),
   );
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "ACTIVATE_UPDATE") self.skipWaiting();
+  if (event.data?.type === "ACTIVATE_UPDATE")
+    event.waitUntil(self.skipWaiting());
   if (event.data?.type === "BUILD_ID")
     event.ports[0]?.postMessage("__BUILD_ID__");
 });
@@ -57,25 +67,44 @@ self.addEventListener("fetch", (event) => {
   )
     return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) {
-        return cached;
-      }
-
-      return fetch(event.request)
-        .then((response) => {
-          if (!response || response.status !== 200) {
-            return response;
-          }
-
-          const clone = response.clone();
-          caches
-            .open(CACHE_NAME)
-            .then((cache) => cache.put(event.request, clone));
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE_NAME);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        try {
+          const response = await fetch(event.request, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (!response.ok) throw new Error("Navigation unavailable");
+          await cache.put(event.request, response.clone()).catch(() => {});
           return response;
-        })
-        .catch(() => caches.match("./"));
-    }),
+        } catch {
+          return (
+            (await cache.match(event.request)) ??
+            (await cache.match("./")) ??
+            Response.error()
+          );
+        } finally {
+          clearTimeout(timer);
+        }
+      })(),
+    );
+    return;
+  }
+
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(event.request);
+      if (cached) return cached;
+      // A failed script/image must never be replaced with HTML.
+      const response = await fetch(event.request);
+      if (response.status === 200)
+        await cache.put(event.request, response.clone()).catch(() => {});
+      return response;
+    })(),
   );
 });
