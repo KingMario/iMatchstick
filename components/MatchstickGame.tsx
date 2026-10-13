@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { ActionIcon } from "@/components/matchstick/ActionIcon";
 import { AnswerProgress } from "@/components/matchstick/AnswerProgress";
 import { copy, type Language } from "@/components/matchstick/copy";
@@ -235,9 +236,27 @@ export function MatchstickGame() {
     window.addEventListener("gesturestart", preventGestureZoom);
 
     const visualViewport = window.visualViewport;
+    let previousViewport = "";
     const updatePhoneViewport = () => {
       const width = visualViewport?.width || window.innerWidth;
       const height = visualViewport?.height || window.innerHeight;
+      const viewport = `${width}:${height}`;
+      if (
+        viewport !== previousViewport &&
+        (dragRef.current || pendingDrag.current)
+      ) {
+        pendingDrag.current = null;
+        dragRef.current = null;
+        setDrag(null);
+        setSelected(null);
+        setMessageKey("selectHint");
+        suppressNextClick.current = true;
+        if (dragReturnTimer.current !== null) {
+          window.clearTimeout(dragReturnTimer.current);
+          dragReturnTimer.current = null;
+        }
+      }
+      previousViewport = viewport;
       const shortSide = Math.min(width, height);
       const hasCoarsePointer = window.matchMedia("(pointer: coarse)").matches;
       const hasMobileUserAgent = /Android|iPhone|iPod|Mobile/i.test(
@@ -249,6 +268,10 @@ export function MatchstickGame() {
       setIsPhone(nextIsPhone);
       setPhonePortrait(nextIsPhone && height >= width);
       document.documentElement.classList.toggle("is-phone-game", nextIsPhone);
+      document.documentElement.classList.toggle(
+        "is-phone-portrait",
+        nextIsPhone && height >= width,
+      );
       if (nextIsPhone) {
         document.documentElement.style.setProperty(
           "--game-viewport-width",
@@ -278,6 +301,7 @@ export function MatchstickGame() {
       window.removeEventListener("pageshow", updatePhoneViewport);
       visualViewport?.removeEventListener("resize", updatePhoneViewport);
       document.documentElement.classList.remove("is-phone-game");
+      document.documentElement.classList.remove("is-phone-portrait");
       document.documentElement.style.removeProperty("--game-viewport-width");
       document.documentElement.style.removeProperty("--game-viewport-height");
     };
@@ -651,6 +675,7 @@ export function MatchstickGame() {
     visible: boolean,
     orientation: "horizontal" | "vertical",
   ) {
+    suppressNextClick.current = false;
     if (interactionLocked || !visible) {
       return;
     }
@@ -915,7 +940,6 @@ export function MatchstickGame() {
 
             <div className="equation-viewport">
               <DifficultyControl
-                portrait={phonePortrait}
                 isLoading={isLoading}
                 text={text}
                 difficulty={difficulty}
@@ -976,25 +1000,28 @@ export function MatchstickGame() {
               />
             </div>
 
-            {drag ? (
-              <div
-                className={`drag-ghost ${drag.orientation} ${drag.returning ? "returning" : ""}`}
-                aria-hidden="true"
-                style={{
-                  left: drag.x,
-                  top: drag.y,
-                  width: drag.helperSize,
-                  height: drag.helperSize,
-                }}
-              >
-                <MatchstickArt
-                  orientation="horizontal"
-                  reversed={
-                    stickDirections[drag.from.position]?.[drag.from.segment]
-                  }
-                />
-              </div>
-            ) : null}
+            {drag
+              ? createPortal(
+                  <div
+                    className={`drag-ghost ${drag.orientation} ${drag.returning ? "returning" : ""}`}
+                    aria-hidden="true"
+                    style={{
+                      left: drag.x,
+                      top: drag.y,
+                      width: drag.helperSize,
+                      height: drag.helperSize,
+                    }}
+                  >
+                    <MatchstickArt
+                      orientation="horizontal"
+                      reversed={
+                        stickDirections[drag.from.position]?.[drag.from.segment]
+                      }
+                    />
+                  </div>,
+                  document.body,
+                )
+              : null}
           </section>
         </div>
       </section>

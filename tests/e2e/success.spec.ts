@@ -197,8 +197,8 @@ test("drag solutions trigger the same celebration", async ({ page }) => {
   await expect(target).toBeVisible();
   const box = (await target.boundingBox())!;
   await page.mouse.move(
-    box.x + box.width / 2 - length * 0.5,
-    box.y + box.height / 2 + length * 0.5,
+    box.x + box.width / 2 - length * 0.3 * 0.65,
+    box.y + box.height / 2 + length * 1.3 * 0.65,
   );
   await page.mouse.up();
   await expect(page.locator(".success-title")).toHaveText(

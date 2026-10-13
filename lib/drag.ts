@@ -35,17 +35,16 @@ export function getDragHelperMetrics(
     Math.round(mainLength * androidHelperSizeRatio),
   );
 
+  const offsetX =
+    mainLength *
+    androidCursorOffsetRatio.x *
+    dragOffsetScale *
+    (dragHand === "left" ? -1 : 1);
+  const offsetY = mainLength * androidCursorOffsetRatio.y * dragOffsetScale;
   return {
     helperSize,
-    offsetX: phonePortrait
-      ? mainLength * 0.5
-      : mainLength *
-        androidCursorOffsetRatio.x *
-        dragOffsetScale *
-        (dragHand === "left" ? -1 : 1),
-    offsetY: phonePortrait
-      ? mainLength * 0.5 * (dragHand === "left" ? 1 : -1)
-      : mainLength * androidCursorOffsetRatio.y * dragOffsetScale,
+    offsetX: phonePortrait ? -offsetY : offsetX,
+    offsetY: phonePortrait ? offsetX : offsetY,
   };
 }
 

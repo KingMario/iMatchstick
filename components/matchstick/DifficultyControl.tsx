@@ -6,7 +6,6 @@ const difficultyIcons = ["✏️", "📄", "📘", "🧮", "🎒", "🧠", "🧑
 
 type Props = {
   isLoading: boolean;
-  portrait: boolean;
   text: CopyText;
   difficulty: PuzzleDifficulty;
   onDifficultyChange: (difficulty: PuzzleDifficulty) => void;
@@ -14,7 +13,6 @@ type Props = {
 
 export function DifficultyControl({
   isLoading,
-  portrait,
   text,
   difficulty,
   onDifficultyChange,
@@ -49,7 +47,7 @@ export function DifficultyControl({
   return (
     <div className="difficulty-stepper" aria-label={text.difficulty}>
       <strong>{text.difficulty}</strong>
-      {portrait ? decrease : increase}
+      {increase}
       <span
         aria-label={text.difficultyValue
           .replace("{level}", String(index))
@@ -58,7 +56,7 @@ export function DifficultyControl({
       >
         {difficultyIcons[index] ?? String(index)}
       </span>
-      {portrait ? increase : decrease}
+      {decrease}
     </div>
   );
 }

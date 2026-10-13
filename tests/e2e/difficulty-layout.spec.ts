@@ -36,13 +36,10 @@ for (const language of ["zh", "en"]) {
       expect(box.x + box.width).toBeLessThanOrEqual(board.x + board.width);
       expect(box.y + box.height).toBeLessThanOrEqual(board.y + board.height);
       const portrait = viewport.width < viewport.height;
-      await expect(level).toHaveCSS(
-        "flex-direction",
-        portrait ? "row" : "column",
-      );
+      await expect(level).toHaveCSS("flex-direction", "column");
       await expect(level.locator(".action-icon").first()).toHaveCSS(
         "transform",
-        portrait ? "none" : "matrix(0, -1, 1, 0, 0, 0)",
+        "matrix(0, -1, 1, 0, 0, 0)",
       );
       const lower = (await decrease.boundingBox())!;
       const higher = (await increase.boundingBox())!;
@@ -56,7 +53,7 @@ for (const language of ["zh", "en"]) {
       }
       await expect(level.locator("strong")).toHaveCSS(
         "writing-mode",
-        portrait ? "horizontal-tb" : "vertical-rl",
+        "vertical-rl",
       );
       const sticks = await page
         .locator(".equation .matchstick-ink")
@@ -112,7 +109,7 @@ for (const language of ["zh", "en"]) {
         if (previous) {
           expect(
             portrait
-              ? bounds.x - previous.x - previous.width
+              ? previous.x - bounds.x - bounds.width
               : bounds.y - previous.y - previous.height,
           ).toBeGreaterThan(0);
         }
@@ -123,8 +120,8 @@ for (const language of ["zh", "en"]) {
       });
       await decrease.click();
       await expect(increase).toBeEnabled();
-      const first = portrait ? decrease : increase;
-      const second = portrait ? increase : decrease;
+      const first = increase;
+      const second = decrease;
       await first.focus();
       await page.keyboard.press("Tab");
       await expect(second).toBeFocused();

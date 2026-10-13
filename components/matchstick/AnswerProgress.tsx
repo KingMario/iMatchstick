@@ -88,12 +88,14 @@ export function AnswerProgress({
       if (document.hidden) finish();
     };
     window.addEventListener("resize", finish);
+    window.visualViewport?.addEventListener("resize", finish);
     reduced.addEventListener("change", finish);
     document.addEventListener("visibilitychange", visibility);
     return () => {
       animation.onfinish = null;
       animation.cancel();
       window.removeEventListener("resize", finish);
+      window.visualViewport?.removeEventListener("resize", finish);
       reduced.removeEventListener("change", finish);
       document.removeEventListener("visibilitychange", visibility);
     };

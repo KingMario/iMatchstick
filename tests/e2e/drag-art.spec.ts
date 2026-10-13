@@ -80,10 +80,10 @@ for (const viewport of [
         const destination = (await target.boundingBox())!;
         const portrait = viewport.width < viewport.height;
         const offsetX = portrait
-          ? length * 0.5
+          ? length * 0.3 * 0.65
           : length * -1.3 * 0.65 * (hand === "left" ? -1 : 1);
         const offsetY = portrait
-          ? length * 0.5 * (hand === "left" ? 1 : -1)
+          ? length * -1.3 * 0.65 * (hand === "left" ? -1 : 1)
           : length * -0.3 * 0.65;
         await cdp.send("Input.dispatchTouchEvent", {
           type: "touchMove",

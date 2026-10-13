@@ -616,23 +616,17 @@ h1 {
   container-type: size;
 }
 
-.phone-portrait .equation {
-  --digit-width: min(
-    88px,
-    calc((100cqh - 128px) / var(--character-count) / 1.12),
-    40cqw
-  );
-
+.phone-portrait.app-shell {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 100cqh;
-  height: 100cqw;
-  min-height: 0;
-  flex: none;
-  gap: calc(var(--digit-width) * 0.12);
-  padding: 12px 64px;
-  transform: translate(-50%, -50%) rotate(90deg);
+  left: 0;
+  top: 0;
+  width: var(--game-viewport-height, 100dvh);
+  height: var(--game-viewport-width, 100vw);
+  transform-origin: top left;
+  transform: translateX(var(--game-viewport-width, 100vw)) rotate(90deg);
+  padding: max(4px, env(safe-area-inset-right))
+    max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left))
+    max(4px, env(safe-area-inset-top));
 }
 
 .phone-layout .difficulty-stepper {
@@ -885,31 +879,6 @@ footer a:hover {
   min-height: 44px;
 }
 
-.phone-portrait .play-area {
-  grid-template-columns: minmax(0, 1fr) 24px;
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.phone-portrait .status-strip {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  text-align: center;
-  font-size: 12px;
-  line-height: 20px;
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  overflow-wrap: anywhere;
-}
-
-.phone-portrait .status-strip span {
-  max-height: 100%;
-}
-
 .status-copy {
   display: flex;
   min-width: 0;
@@ -928,44 +897,14 @@ footer a:hover {
   font-size: 12px;
 }
 
-.phone-layout:not(.phone-portrait) .status-copy {
+.phone-layout .status-copy {
   flex-direction: row;
   justify-content: center;
   gap: 12px;
 }
 
-.phone-layout:not(.phone-portrait) .status-brand {
+.phone-layout .status-brand {
   flex-shrink: 0;
-}
-
-.phone-portrait .status-copy {
-  min-height: 0;
-  flex-direction: row;
-  gap: 12px;
-}
-
-.phone-portrait .status-strip span:nth-child(3) {
-  text-align: center;
-}
-
-.phone-portrait .equation-viewport {
-  grid-column: 1;
-  grid-row: 1 / -1;
-}
-
-.phone-portrait .equation-viewport > .difficulty-stepper {
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  flex-direction: row;
-}
-
-.phone-portrait .equation-viewport > .difficulty-stepper strong {
-  writing-mode: horizontal-tb;
-}
-
-.phone-portrait .equation-viewport > .difficulty-stepper .action-icon {
-  transform: none;
 }
 
 .equation-viewport > .play-controls {
@@ -991,20 +930,6 @@ footer a:hover {
   height: 100%;
   min-width: 0;
   min-height: 0;
-}
-
-.phone-portrait .equation-viewport > .play-controls {
-  top: auto;
-  right: auto;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 236px;
-  height: 44px;
-}
-
-.phone-portrait .equation-viewport > .play-controls .actions {
-  grid-template-columns: repeat(5, 44px);
-  grid-template-rows: 44px;
 }
 
 /* Desktop sizing stays independent of the phone's rotated, single-screen board. */
@@ -1303,13 +1228,11 @@ footer a:hover {
   }
 }
 
-.phone-portrait .status-copy .success {
-  display: flex;
-  flex-direction: row;
+.phone-layout .status-copy .success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
-}
-.phone-portrait .status-copy .success {
-  line-height: 20px;
 }
 .success-confetti {
   position: absolute;
@@ -1405,4 +1328,78 @@ footer a:hover {
   border: 0;
   background: transparent;
   color: var(--ink);
+}
+
+.is-phone-game .game-overlay {
+  position: fixed;
+  inset: auto;
+  left: calc(
+    (
+        var(--game-viewport-width, 100vw) + env(safe-area-inset-left) -
+          env(safe-area-inset-right)
+      ) /
+      2
+  );
+  top: calc(
+    (
+        var(--game-viewport-height, 100dvh) + env(safe-area-inset-top) -
+          env(safe-area-inset-bottom)
+      ) /
+      2
+  );
+  width: min(
+    440px,
+    calc(
+      var(--game-viewport-width, 100vw) - 24px - env(safe-area-inset-left) -
+        env(safe-area-inset-right)
+    )
+  );
+  max-height: calc(
+    var(--game-viewport-height, 100dvh) - 24px - env(safe-area-inset-top) -
+      env(safe-area-inset-bottom)
+  );
+  max-width: none;
+  margin: 0;
+  transform: translate(-50%, -50%);
+}
+
+.is-phone-portrait .game-overlay {
+  width: min(
+    440px,
+    calc(
+      var(--game-viewport-height, 100dvh) - 24px - env(safe-area-inset-top) -
+        env(safe-area-inset-bottom)
+    )
+  );
+  max-height: calc(
+    var(--game-viewport-width, 100vw) - 24px - env(safe-area-inset-left) -
+      env(safe-area-inset-right)
+  );
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.is-phone-portrait .overlay-body {
+  touch-action: none;
+}
+
+.phone-layout .play-controls {
+  flex-direction: row;
+}
+
+.phone-layout .language-switch {
+  padding: 2px;
+}
+
+.phone-layout .language-switch button {
+  min-width: 40px;
+  min-height: 34px;
+}
+
+.phone-layout .update-notice {
+  max-width: calc(100% - 16px);
+}
+
+.phone-portrait .update-notice {
+  top: max(8px, env(safe-area-inset-right));
+  right: max(8px, env(safe-area-inset-bottom));
 }

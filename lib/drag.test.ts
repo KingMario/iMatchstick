@@ -24,8 +24,8 @@ describe("screen-space drag preview", () => {
         false,
         "left",
       );
-      assert.equal(portrait.offsetX, 40);
-      assert.equal(portrait.offsetY, 40);
+      assert.equal(portrait.offsetX, -landscape.offsetY);
+      assert.equal(portrait.offsetY, landscape.offsetX);
       assert.ok(landscape.offsetX > 0);
       assert.ok(landscape.offsetY < 0);
       for (const metrics of [portrait, landscape]) {
@@ -51,8 +51,8 @@ describe("screen-space drag preview", () => {
     );
     assert.deepEqual(horizontal, {
       helperSize: 32,
-      offsetX: 40,
-      offsetY: -40,
+      offsetX: 80 * 0.3 * 0.65,
+      offsetY: 80 * -1.3 * 0.65,
     });
     assert.deepEqual(vertical, horizontal);
   });
@@ -80,7 +80,10 @@ describe("screen-space drag preview", () => {
       metrics.offsetX,
       metrics.offsetY,
     );
-    assert.deepEqual(dropPoint, { x: 240, y: 260 });
+    assert.deepEqual(dropPoint, {
+      x: 200 + 80 * 0.3 * 0.65,
+      y: 300 - 80 * 1.3 * 0.65,
+    });
     assert.equal(preview.x, dropPoint.x);
     assert.equal(preview.y, dropPoint.y);
   });
