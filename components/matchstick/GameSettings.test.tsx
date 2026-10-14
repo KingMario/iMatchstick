@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import {
   Children,
@@ -59,6 +60,8 @@ function find(
   return result;
 }
 
+const settingsCss = readFileSync("app/globals.css", "utf8");
+
 describe("grouped settings", () => {
   for (const language of ["zh", "en"] as const) {
     for (const isPhone of [false, true]) {
@@ -109,6 +112,75 @@ describe("grouped settings", () => {
         assert.equal((html.match(/<details\b/g) ?? []).length, 3);
         assert.doesNotMatch(html, /<details[^>]*\sopen(?:[\s=>])/);
         assert.match(html, /Copyright Mario Studio 2026-2027/);
+      });
+
+      it(`keeps Timer and Sound adjacent in the two-column source grid without a hand hint: ${language}, phone=${isPhone}`, () => {
+        const input = props({ language, text: copy[language], isPhone });
+        const common = find(
+          elements(GameSettings(input).props.children),
+          (node) => node.props.className === "settings-common",
+        );
+        const rows = Children.toArray(
+          common.props.children as ReactNode,
+        ).filter(isValidElement) as Element[];
+        assert.deepEqual(
+          rows.map(
+            (row) =>
+              find(
+                elements(row.props.children as ReactNode),
+                (node) => node.type === "span",
+              ).props.children,
+          ),
+          [
+            input.text.languageLabel,
+            ...(isPhone ? [input.text.dragHand] : []),
+            input.text.timer,
+            input.text.sound,
+          ],
+        );
+        assert.deepEqual(
+          rows.slice(-2).map((row) => row.type),
+          ["label", "label"],
+        );
+
+        // Model CSS auto-placement from the actual direct children and source
+        // rules. This checks structure, not rendered geometry or text fitting.
+        const grid = settingsCss.match(/\.settings-common \{([^}]+)\}/)?.[1];
+        assert.ok(grid);
+        assert.match(grid, /display:\s*grid/);
+        const columns = grid.match(
+          /grid-template-columns:\s*repeat\((\d+),\s*minmax\(0,\s*1fr\)\)/,
+        );
+        assert.ok(columns);
+        assert.equal(Number(columns[1]), 2);
+        assert.match(
+          settingsCss,
+          /\.settings-language-wide \{\s*grid-column:\s*1 \/ -1;/,
+        );
+        let cell = 0;
+        const placements = rows.map((row) => {
+          const wide = String(row.props.className)
+            .split(" ")
+            .includes("settings-language-wide");
+          if (wide) cell = Math.ceil(cell / 2) * 2;
+          const placement = { row: Math.floor(cell / 2), column: cell % 2 };
+          cell += wide ? 2 : 1;
+          return placement;
+        });
+        assert.deepEqual(placements.slice(-2), [
+          { row: 1, column: 0 },
+          { row: 1, column: 1 },
+        ]);
+        const html = renderToStaticMarkup(common);
+        assert.doesNotMatch(
+          html,
+          /settings-hand-hint|hand-preference-hint|<p\b/,
+        );
+        assert.doesNotMatch(
+          html,
+          /题目随惯用手|Shifts the puzzle toward your preferred hand/,
+        );
+        assert.equal("dragHandHint" in copy[language], false);
       });
     }
   }
@@ -260,6 +332,7 @@ for (const language of ["zh", "en"] as const) {
       const nodes = elements(tree.props.children);
       const group = find(nodes, (node) => node.props.role === "radiogroup");
       assert.equal(group.props["aria-label"], input.text.dragHand);
+      assert.equal(group.props["aria-describedby"], undefined);
       const radios = elements(group).filter(
         (node) => node.props.type === "radio",
       );

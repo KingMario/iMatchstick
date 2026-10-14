@@ -60,7 +60,6 @@ export const copy = {
     loading: "正在出题…",
     loadFailed: "出题失败，请重试。",
     dragHand: "惯用手",
-    dragHandHint: "题目随惯用手靠左或靠右。触摸拖拽始终按指尖位置放下。",
     leftHand: "左手",
     rightHand: "右手",
     close: "关闭",
@@ -223,8 +222,6 @@ export const copy = {
     loading: "Loading puzzle…",
     loadFailed: "Unable to load a puzzle. Please try again.",
     dragHand: "Preferred hand",
-    dragHandHint:
-      "Shifts the puzzle toward your preferred hand. Touch drops always follow your finger.",
     leftHand: "Left hand",
     rightHand: "Right hand",
     close: "Close",

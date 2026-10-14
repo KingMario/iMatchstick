@@ -62,6 +62,46 @@ for (const language of ["zh", "en"] as const) {
         await expect(common.getByRole("radiogroup")).toHaveCount(
           device.isMobile ? 1 : 0,
         );
+        await expect(
+          common.locator(".settings-hand-hint, #hand-preference-hint, p"),
+        ).toHaveCount(0);
+        await expect(
+          common.locator('[aria-describedby="hand-preference-hint"]'),
+        ).toHaveCount(0);
+        const layout = await common.evaluate((element) => {
+          const rows = Array.from(
+            element.querySelectorAll<HTMLLabelElement>("label.settings-row"),
+          );
+          return rows.map((row) => ({
+            top: row.offsetTop,
+            left: row.offsetLeft,
+            height: row.offsetHeight,
+            fontSize: Number.parseFloat(getComputedStyle(row).fontSize),
+            fits: row.scrollWidth <= row.clientWidth + 1,
+          }));
+        });
+        expect(layout).toHaveLength(2);
+        expect(Math.abs(layout[0].top - layout[1].top)).toBeLessThanOrEqual(1);
+        expect(layout[0].left).toBeLessThan(layout[1].left);
+        for (const row of layout) {
+          expect(row.height).toBeGreaterThanOrEqual(52);
+          expect(row.fontSize).toBeGreaterThanOrEqual(16);
+          expect(row.fits).toBe(true);
+        }
+        const segments = await common
+          .locator(".hand-switch span, .language-switch button")
+          .evaluateAll((controls) =>
+            controls.map((control) => ({
+              width: (control as HTMLElement).offsetWidth,
+              height: (control as HTMLElement).offsetHeight,
+              fits: control.scrollWidth <= control.clientWidth + 1,
+            })),
+          );
+        for (const segment of segments) {
+          expect(segment.width).toBeGreaterThanOrEqual(44);
+          expect(segment.height).toBeGreaterThanOrEqual(44);
+          expect(segment.fits).toBe(true);
+        }
         await expect(dialog.locator("details")).toHaveCount(3);
         await expect(dialog.locator("details[open]")).toHaveCount(0);
         await expect(dialog.locator("summary")).toHaveText(

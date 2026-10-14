@@ -1685,10 +1685,3 @@ footer a:hover {
 .drag-ghost.snapped .matchstick-art {
   animation: none;
 }
-
-.settings-hand-hint {
-  margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.4;
-}
