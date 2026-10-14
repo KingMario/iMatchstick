@@ -3,6 +3,7 @@ import { type Language } from "@/components/matchstick/copy";
 export type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 type SpeechRecognitionResultLike = {
+  readonly isFinal?: boolean;
   readonly length: number;
   [index: number]: {
     transcript: string;
@@ -10,6 +11,7 @@ type SpeechRecognitionResultLike = {
 };
 
 export type SpeechRecognitionEventLike = Event & {
+  readonly resultIndex?: number;
   results: {
     readonly length: number;
     [index: number]: SpeechRecognitionResultLike;

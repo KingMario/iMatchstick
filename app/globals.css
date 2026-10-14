@@ -1653,3 +1653,30 @@ footer a:hover {
     outline-color: Highlight;
   }
 }
+
+/* Captions float within the reserved header, never over puzzle hit targets.
+   Staying inside app-shell makes them share the game's portrait rotation. */
+.voice-caption {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 2px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--paper, #fffaf0);
+  box-shadow: 0 2px 8px #362a191a;
+  font-size: 12px;
+  line-height: 1.25;
+  pointer-events: none;
+}
+.voice-caption strong {
+  font-size: 10px;
+  color: var(--muted);
+}
+.voice-caption span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

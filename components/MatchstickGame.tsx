@@ -69,8 +69,9 @@ import { getSuccessFeedback } from "@/lib/success";
 import {
   getSpeechRecognitionConstructor,
   parseSpokenExpression,
-  type SpeechRecognitionLike,
 } from "@/lib/speech";
+
+import { createVoiceSession, type VoiceSession } from "@/lib/voiceSession";
 
 type Stats = {
   solved: number;
@@ -155,6 +156,10 @@ export function MatchstickGame() {
   const [stats, setStats] = useState<Stats>(initialStats);
   const [drag, setDrag] = useState<DragState>(null);
   const [listening, setListening] = useState(false);
+  const [voiceCaption, setVoiceCaption] = useState<{
+    text: string;
+    final: boolean;
+  } | null>(null);
   const [isPhone, setIsPhone] = useState(false);
   const [phonePortrait, setPhonePortrait] = useState(false);
   const suppressNextClick = useRef(false);
@@ -163,8 +168,7 @@ export function MatchstickGame() {
   const dragRef = useRef<DragState>(null);
   const dragReturnTimer = useRef<number | null>(null);
   const applauseAudio = useRef<HTMLAudioElement | null>(null);
-  const speechRecognition = useRef<SpeechRecognitionLike | null>(null);
-  const voiceCanceling = useRef(false);
+  const voiceSession = useRef<VoiceSession | null>(null);
   const equationRef = useRef<HTMLDivElement>(null);
 
   const text = copy[language];
@@ -238,7 +242,8 @@ export function MatchstickGame() {
       if (dragReturnTimer.current !== null) {
         window.clearTimeout(dragReturnTimer.current);
       }
-      speechRecognition.current?.abort();
+      voiceSession.current?.cancel();
+      voiceSession.current = null;
     };
   }, []);
 
@@ -367,6 +372,8 @@ export function MatchstickGame() {
     }
 
     const timerId = window.setInterval(() => {
+      // Invalidate the session before the timeout render/effect can be delayed.
+      if (timeLeft <= 1) cancelVoice();
       setTimeLeft((current) => Math.max(0, current - 1));
     }, 1000);
 
@@ -375,16 +382,34 @@ export function MatchstickGame() {
 
   useEffect(() => {
     if (timerEnabled && timeLeft === 0 && !solved) {
+      cancelVoice();
       setSelected(null);
       setMessageKey("timeout");
     }
   }, [timerEnabled, timeLeft, solved]);
 
+  useEffect(() => {
+    if (listening || !voiceCaption) return;
+    const timer = window.setTimeout(() => setVoiceCaption(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [listening, voiceCaption]);
+
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.visibilityState !== "hidden" || !voiceSession.current)
+        return;
+      cancelVoice();
+      setMessageKey((current) =>
+        current === "voiceListening" ? "selectHint" : current,
+      );
+    };
+    document.addEventListener("visibilitychange", onHidden);
+    return () => document.removeEventListener("visibilitychange", onHidden);
+  }, []);
+
   function resetPuzzle(nextPuzzle: Puzzle) {
     clearDragReturnTimer();
-    speechRecognition.current?.abort();
-    speechRecognition.current = null;
-    setListening(false);
+    cancelVoice();
     setPuzzle(nextPuzzle);
     setStickDirections(createStickDirections(nextPuzzle.expression.length));
     setDisplayExpression(nextPuzzle.expression);
@@ -413,9 +438,7 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
-    speechRecognition.current?.abort();
-    speechRecognition.current = null;
-    setListening(false);
+    cancelVoice();
     const requestId = ++puzzleRequestId.current;
     void pickPuzzleFromBook(nextDifficulty, puzzle.expression).then(
       (nextPuzzle) => {
@@ -444,9 +467,7 @@ export function MatchstickGame() {
 
   function undoPuzzle() {
     clearDragReturnTimer();
-    speechRecognition.current?.abort();
-    speechRecognition.current = null;
-    setListening(false);
+    cancelVoice();
     setDisplayExpression(puzzle.expression);
     setSelected(null);
     setDragState(null);
@@ -457,9 +478,7 @@ export function MatchstickGame() {
 
   function solve(nextExpression: string) {
     clearDragReturnTimer();
-    speechRecognition.current?.abort();
-    speechRecognition.current = null;
-    setListening(false);
+    cancelVoice();
     const isNewAnswer = !solvedAnswers.includes(nextExpression);
     setSuccessFeedback(
       getSuccessFeedback(
@@ -517,99 +536,74 @@ export function MatchstickGame() {
     setShareFeedback("shareFailed");
   }
 
-  function startVoiceAnswer() {
-    if (interactionLocked) {
-      return;
-    }
+  function cancelVoice() {
+    const session = voiceSession.current;
+    voiceSession.current = null;
+    session?.cancel();
+    setListening(false);
+    setVoiceCaption(null);
+  }
 
-    if (listening && speechRecognition.current) {
-      voiceCanceling.current = true;
-      speechRecognition.current.abort();
-      speechRecognition.current = null;
-      setListening(false);
+  function startVoiceAnswer() {
+    // Cancellation must remain possible even if the timer expires this frame.
+    if (voiceSession.current) {
+      cancelVoice();
       setMessageKey(getSelectionMessageKey(Boolean(selected)));
       return;
     }
-
+    if (interactionLocked) return;
     const Recognition = getSpeechRecognitionConstructor();
-
     if (!Recognition) {
       setMessageKey("voiceUnsupported");
       return;
     }
-
-    speechRecognition.current?.abort();
-    voiceCanceling.current = false;
-
-    const recognition = new Recognition();
-    speechRecognition.current = recognition;
-    recognition.lang = language === "zh" ? "zh-CN" : "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 5;
-    recognition.onresult = (event) => {
-      if (speechRecognition.current !== recognition || loadingRef.current)
-        return;
-      const transcripts: string[] = [];
-
-      for (let index = 0; index < event.results.length; index += 1) {
-        const result = event.results[index];
-
-        for (
-          let alternative = 0;
-          alternative < result.length;
-          alternative += 1
-        ) {
-          transcripts.push(result[alternative].transcript);
-        }
-      }
-
-      const expression = parseSpokenExpression(transcripts, language);
-
-      if (expression && isAnswer(expression, puzzle.answers)) {
-        solve(expression);
-        return;
-      }
-
-      setMessageKey("voiceNoMatch");
-    };
-    recognition.onerror = (event) => {
-      if (speechRecognition.current !== recognition) {
-        return;
-      }
-
-      if (voiceCanceling.current) {
-        voiceCanceling.current = false;
-        speechRecognition.current = null;
-        setListening(false);
-        return;
-      }
-
-      setListening(false);
-      setMessageKey(
-        event.error === "not-allowed" || event.error === "service-not-allowed"
-          ? "voicePermission"
-          : "voiceNoMatch",
-      );
-    };
-    recognition.onend = () => {
-      if (speechRecognition.current !== recognition) {
-        return;
-      }
-
-      voiceCanceling.current = false;
-      speechRecognition.current = null;
-      setListening(false);
-    };
-
-    try {
-      setListening(true);
-      setMessageKey("voiceListening");
-      recognition.start();
-    } catch {
-      setListening(false);
-      setMessageKey("voiceNoMatch");
-    }
+    setListening(true);
+    setVoiceCaption({ text: "", final: false });
+    setMessageKey("voiceListening");
+    const session = createVoiceSession(
+      Recognition,
+      language === "zh" ? "zh-CN" : "en-US",
+      {
+        transcript: (value, final) => {
+          if (voiceSession.current !== session || loadingRef.current) return;
+          setVoiceCaption({ text: value, final });
+        },
+        answer: (transcripts) => {
+          if (voiceSession.current !== session || loadingRef.current) return;
+          // A parseable but wrong first alternative must not hide a later answer.
+          const answer = transcripts
+            .map((transcript) => ({
+              transcript,
+              expression: parseSpokenExpression([transcript], language),
+            }))
+            .find(
+              ({ expression }) =>
+                expression !== null && isAnswer(expression, puzzle.answers),
+            );
+          if (answer?.expression) {
+            solve(answer.expression);
+            setVoiceCaption({ text: answer.transcript, final: true });
+          } else {
+            setMessageKey("voiceNoMatch");
+          }
+        },
+        finish: (reason, error) => {
+          if (voiceSession.current !== session) return;
+          voiceSession.current = null;
+          setListening(false);
+          setVoiceCaption((current) =>
+            reason === "end" && current ? { ...current, final: true } : null,
+          );
+          setMessageKey(
+            error === "not-allowed" || error === "service-not-allowed"
+              ? "voicePermission"
+              : "voiceNoMatch",
+          );
+        },
+      },
+    );
+    voiceSession.current = session;
+    session.start();
   }
 
   function handleSegmentClick(
@@ -909,10 +903,7 @@ export function MatchstickGame() {
     pendingDrag.current = null;
     setDragState(null);
     setSelected(null);
-    voiceCanceling.current = true;
-    speechRecognition.current?.abort();
-    speechRecognition.current = null;
-    setListening(false);
+    cancelVoice();
     setSettingsOpen(false);
     setShowAnswers(false);
     saveAcademyProgress({ ...academyProgress, welcomed: true });
@@ -922,6 +913,15 @@ export function MatchstickGame() {
   function closeAcademy() {
     saveAcademyProgress({ ...academyProgress, welcomed: true });
     setAcademyView(null);
+  }
+
+  function openSettings() {
+    cancelVoice();
+    setMessageKey((current) =>
+      current === "voiceListening" ? "selectHint" : current,
+    );
+    setShareFeedback(null);
+    setSettingsOpen(true);
   }
 
   function clearStats() {
@@ -1043,42 +1043,65 @@ export function MatchstickGame() {
                       title={text.settingsTitle}
                       aria-haspopup="dialog"
                       aria-expanded={settingsOpen}
-                      onClick={() => {
-                        setShareFeedback(null);
-                        setSettingsOpen(true);
-                      }}
+                      onClick={openSettings}
                     >
                       <ActionIcon name="settings" />
                     </button>
                   </div>
                   <div className="status-copy">
-                    <strong className="status-brand">{text.title}</strong>
-                    <span
-                      className={solved ? "success" : ""}
-                      role="status"
-                      title={text[messageKey]}
-                    >
-                      {isLoading ? (
-                        text.loading
-                      ) : solved && successFeedback ? (
-                        <>
-                          <strong className="success-title">
-                            ✓ {text.successResults[successFeedback.kind]}
-                          </strong>
-                          <small className="success-next">
-                            {isPhone
-                              ? answersFound === puzzle.answers.length
-                                ? text.successNextCompact
-                                : text.successMoreCompact
-                              : answersFound === puzzle.answers.length
-                                ? text.successNext
-                                : text.successMore}
-                          </small>
-                        </>
-                      ) : (
-                        text.shortHints[messageKey]
-                      )}
-                    </span>
+                    {voiceCaption ? (
+                      <div
+                        className="voice-caption"
+                        role="status"
+                        aria-live="polite"
+                        aria-atomic="true"
+                        data-final={voiceCaption.final}
+                      >
+                        <strong>
+                          {solved && successFeedback
+                            ? `✓ ${text.successResults[successFeedback.kind]}`
+                            : listening
+                              ? text.voiceCaptionListening
+                              : text.voiceCaptionHeard}
+                        </strong>
+                        <span title={voiceCaption.text}>
+                          {voiceCaption.text ||
+                            (listening
+                              ? text.voiceCaptionPrompt
+                              : text.voiceCaptionEmpty)}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <strong className="status-brand">{text.title}</strong>
+                        <span
+                          className={solved ? "success" : ""}
+                          role="status"
+                          title={text[messageKey]}
+                        >
+                          {isLoading ? (
+                            text.loading
+                          ) : solved && successFeedback ? (
+                            <>
+                              <strong className="success-title">
+                                ✓ {text.successResults[successFeedback.kind]}
+                              </strong>
+                              <small className="success-next">
+                                {isPhone
+                                  ? answersFound === puzzle.answers.length
+                                    ? text.successNextCompact
+                                    : text.successMoreCompact
+                                  : answersFound === puzzle.answers.length
+                                    ? text.successNext
+                                    : text.successMore}
+                              </small>
+                            </>
+                          ) : (
+                            text.shortHints[messageKey]
+                          )}
+                        </span>
+                      </>
+                    )}
                   </div>
                   <span
                     aria-label={
@@ -1151,7 +1174,13 @@ export function MatchstickGame() {
                     interactionLocked={interactionLocked}
                     onNewPuzzle={startNewPuzzle}
                     onUndo={undoPuzzle}
-                    onToggleAnswers={() => setShowAnswers((value) => !value)}
+                    onToggleAnswers={() => {
+                      cancelVoice();
+                      setMessageKey((current) =>
+                        current === "voiceListening" ? "selectHint" : current,
+                      );
+                      setShowAnswers((value) => !value);
+                    }}
                     onVoiceAnswer={startVoiceAnswer}
                   />
                 </div>
@@ -1240,7 +1269,7 @@ export function MatchstickGame() {
           !updateDismissed &&
           !settingsOpen ? (
             <aside className="update-notice" aria-label={text.updateAvailable}>
-              <button type="button" onClick={() => setSettingsOpen(true)}>
+              <button type="button" onClick={openSettings}>
                 {text.updateAvailable}
               </button>
               <button type="button" onClick={() => setUpdateDismissed(true)}>
