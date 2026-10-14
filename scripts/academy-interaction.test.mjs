@@ -14,7 +14,8 @@ const {
 
 // This deliberately tests the real React component handlers with a small hook/DOM
 // model. It is NOT a browser, layout, accessibility, or native pointer-event test.
-// Academy validation, MatchstickChar rendering, and drag math are production code.
+// Academy validation, MatchstickChar and SVG artwork rendering, and drag math
+// are production code. The magnifier presentation remains modeled.
 function mount(id, overrides = {}) {
   const lesson = academy.academyLessons.find((item) => item.id === id);
   assert.ok(lesson, id);
@@ -148,7 +149,9 @@ function mount(id, overrides = {}) {
             assert.equal(selector, ".matchstick-art");
             if (
               this.props["data-testid"] !== "academy-reservoir" ||
-              !walk(this.props.children).some((child) => child.type === "art")
+              !walk(this.props.children).some(
+                (child) => child.props?.className === "matchstick-art",
+              )
             )
               return null;
             // The artwork is much shorter than its surrounding button. Model
@@ -257,7 +260,7 @@ function mount(id, overrides = {}) {
           if (name === "./MatchstickChar")
             return load("components/matchstick/MatchstickChar.tsx");
           if (name === "./MatchstickArt")
-            return { MatchstickArt: (props) => jsx("art", props) };
+            return load("components/matchstick/MatchstickArt.tsx");
           if (name === "./TouchMagnifier")
             return { TouchMagnifier: (props) => jsx("touch-magnifier", props) };
           if (name === "./SuccessConfetti")
@@ -393,6 +396,56 @@ function mount(id, overrides = {}) {
   };
 }
 
+function matchArtwork(node) {
+  if (!node || typeof node !== "object") return [];
+  if (Array.isArray(node)) return node.flatMap(matchArtwork);
+  return [
+    ...(node.type === "svg" && node.props.className === "matchstick-art"
+      ? [node]
+      : []),
+    ...matchArtwork(node.props?.children),
+  ];
+}
+function assertSourceArtwork(node, hidden) {
+  assert.equal(node.type, "button", "source button remains mounted");
+  const artwork = matchArtwork(node);
+  assert.equal(artwork.length, 1, "source keeps its SVG artwork");
+  assert.equal(artwork[0].props.style?.visibility === "hidden", hidden);
+  assert.notEqual(node.props.style?.visibility, "hidden", "only hide artwork");
+  assert.notEqual(node.props.style?.display, "none", "keep the hit target");
+  assert.notEqual(node.props.style?.opacity, 0, "keep button presentation");
+}
+function assertNoHiddenArtwork(h) {
+  assert.ok(
+    h
+      .nodes()
+      .filter((node) => node.type === "svg")
+      .every((node) => node.props.style?.visibility !== "hidden"),
+    "cleared gesture restores every remaining source artwork",
+  );
+}
+function currentSource(h) {
+  const { from } = academy.getAcademySolution(h.lesson);
+  return from ? h.segment(from) : h.byId("academy-reservoir");
+}
+function assertPressedArtwork(h, original = currentSource(h)) {
+  const current = currentSource(h);
+  assertSourceArtwork(current, true);
+  assert.equal(current.element, original.element, "capture owner is unchanged");
+  assert.equal(current.props.disabled, false, "press keeps source actionable");
+  assert.ok(current.element.captures.has(7), "source retains pointer capture");
+  assert.equal(
+    h
+      .nodes()
+      .filter(
+        (node) =>
+          node.type === "svg" && node.props.style?.visibility === "hidden",
+      ).length,
+    1,
+    "only the primary source artwork is hidden",
+  );
+}
+
 function clickSolution(h) {
   const { from, to } = academy.getAcademySolution(h.lesson);
   h.click(from ? h.segment(from) : h.byId("academy-reservoir"));
@@ -404,7 +457,9 @@ function center(node) {
 }
 function startDrag(h, source) {
   h.pointer(source, "Down", ...center(source));
+  assertSourceArtwork(currentSource(h), false);
   h.pointer(source, "Move", 900, 900);
+  assertSourceArtwork(currentSource(h), false);
   assert.ok(h.ghost(), "threshold crossing renders the real helper");
 }
 
@@ -944,6 +999,13 @@ for (const phonePortrait of [false, true]) {
       h.pointer(source, "Down", ...center(source));
       assert.ok(!h.ghost());
       assert.ok(h.lens(), "phone touch renders its lens on pointerdown");
+      assertPressedArtwork(h, source);
+      assert.deepEqual(
+        h.visibleSegments(),
+        academy
+          .getAcademyVisibleSegments(h.lesson.initial)
+          .filter((point) => h.lesson.initial[point.position] !== "="),
+      );
       assert.equal(h.lens().props.stick.snapped, false);
       const target = h.segment(to);
       const [x, y] = center(target);
@@ -960,6 +1022,7 @@ for (const phonePortrait of [false, true]) {
       );
       assert.equal(lens.props.stick.snapped, true);
       assert.ok(!h.ghost(), "phone touch never shows the old offset helper");
+      assertPressedArtwork(h, source);
       h.pointer(source, "Up", x, y);
       assert.ok(h.success());
       assert.ok(!h.nodes().some((node) => node.type === "touch-magnifier"));
@@ -993,6 +1056,8 @@ for (const id of ["academy-5-2", "academy-2-1"])
           "pending and active phone gestures both show a lens",
         );
         assert.ok(!h.ghost());
+        assertPressedArtwork(h, source);
+        assert.deepEqual(h.visibleSegments(), initial);
         if (interruption === "pointercancel")
           h.pointer(source, "Cancel", 900, 900);
         else if (interruption === "lostcapture") h.lostCapture();
@@ -1004,6 +1069,7 @@ for (const id of ["academy-5-2", "academy-2-1"])
         else if (interruption === "reset") h.click(h.byId("academy-reset"));
         else h.emit(interruption);
         assert.ok(!h.lens());
+        assertNoHiddenArtwork(h);
         assert.equal(source.element.captures.size, 0);
         assert.deepEqual(h.completed, []);
         // Stale captured handlers cannot restore an interrupted pending lens.
@@ -1012,6 +1078,8 @@ for (const id of ["academy-5-2", "academy-2-1"])
         assert.ok(!h.lens());
         assert.ok(!h.ghost());
         if (interruption === "help") h.click(h.byId("academy-hint-close"));
+        assertSourceArtwork(currentSource(h), false);
+        assertNoHiddenArtwork(h);
         assert.deepEqual(h.visibleSegments(), initial);
         clickSolution(h);
         assert.ok(h.success());
@@ -1029,6 +1097,7 @@ for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"])
         const initial = h.visibleSegments();
         const [x, y] = center(source());
         h.pointer(source(), "Down", x, y);
+        assertPressedArtwork(h, source());
         assert.ok(h.lens(), "lens appears before any movement");
         assert.equal(h.lens().props.point.x, x);
         assert.equal(h.lens().props.point.y, y);
@@ -1049,6 +1118,7 @@ for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"])
         assert.ok(!h.ghost());
         if (belowThreshold) {
           h.pointer(source(), "Move", x + 2, y + 2);
+          assertPressedArtwork(h, source());
           assert.equal(h.lens().props.point.x, x + 2);
           assert.equal(h.lens().props.point.y, y + 2);
           assert.equal(h.lens().props.stick.snapped, false);
@@ -1057,6 +1127,8 @@ for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"])
           assert.deepEqual(h.completed, []);
         }
         h.pointer(source(), "Up", x, y);
+        assertSourceArtwork(source(), false);
+        assertNoHiddenArtwork(h);
         assert.ok(!h.lens());
         assert.equal(source().element.captures.size, 0);
         assert.deepEqual(h.visibleSegments(), initial);
@@ -1091,6 +1163,7 @@ for (const id of ["academy-5-2", "academy-2-1"])
       const stick = { ...h.lens().props.stick };
       for (const phase of ["Down", "Move", "Up", "Cancel"]) {
         h.pointer(source, phase, 1000, 1200, 99);
+        assertPressedArtwork(h, source);
         assert.ok(h.lens(), `secondary ${phase} must not dismiss the lens`);
         assert.deepEqual({ ...h.lens().props.point }, point);
         assert.deepEqual({ ...h.lens().props.stick }, stick);
@@ -1101,11 +1174,14 @@ for (const id of ["academy-5-2", "academy-2-1"])
       }
       h.lostCapture(99);
       assert.ok(h.lens(), "secondary lostcapture must not dismiss the lens");
+      assertPressedArtwork(h, source);
       assert.deepEqual({ ...h.lens().props.point }, point);
       const target = h.segment(to);
       h.pointer(source, "Move", ...center(target));
       h.pointer(source, "Up", ...center(target));
       assert.ok(h.success(), "the original pointer still owns the move");
+      assertSourceArtwork(h.segment(to), false);
+      assertNoHiddenArtwork(h);
       assert.ok(!h.lens());
       assert.equal(source.element.captures.size, 0);
     });
@@ -1118,6 +1194,8 @@ for (const id of ["academy-5-2", "academy-2-1"])
       h.pointer(source, "Down", ...center(source));
       if (mode === "active") h.pointer(source, "Move", 900, 900);
       h.pointer(source, "Up", -1000, -1000);
+      assertSourceArtwork(currentSource(h), false);
+      assertNoHiddenArtwork(h);
       assert.ok(!h.lens());
       assert.ok(!h.ghost());
       assert.equal(source.element.captures.size, 0);
@@ -1146,12 +1224,14 @@ test("Academy phone mouse press has no lens and keeps the threshold helper", () 
   const [x, y] = center(source);
   const mouse = { pointerType: "mouse" };
   h.pointer(source, "Down", x, y, 7, mouse);
+  assertSourceArtwork(currentSource(h), false);
   assert.ok(!h.lens());
   assert.ok(!h.ghost());
   h.pointer(source, "Move", x + 2, y + 2, 7, mouse);
   assert.ok(!h.lens());
   assert.ok(!h.ghost());
   h.pointer(source, "Move", 900, 900, 7, mouse);
+  assertSourceArtwork(currentSource(h), false);
   assert.ok(!h.lens());
   assert.ok(h.ghost());
   h.pointer(source, "Cancel", 900, 900, 7, mouse);
@@ -1166,12 +1246,15 @@ for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"]) {
     h.click(source());
     assert.ok(source().props.className.split(" ").includes("selected"));
     h.pointer(source(), "Down", ...center(source()));
+    assertPressedArtwork(h, source());
     assert.ok(h.lens());
     assert.ok(
       source().props.className.split(" ").includes("selected"),
       "press preserves prior selection",
     );
     h.pointer(source(), "Up", ...center(source()));
+    assertSourceArtwork(source(), false);
+    assertNoHiddenArtwork(h);
     assert.ok(!h.lens());
     assert.ok(
       source().props.className.split(" ").includes("selected"),
@@ -1195,6 +1278,8 @@ for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"]) {
     h.pointer(source, "Down", ...center(source));
     const target = to ? h.segment(to) : h.byId("academy-reservoir");
     h.pointer(source, "Up", ...center(target));
+    assertSourceArtwork(currentSource(h), false);
+    assertNoHiddenArtwork(h);
     assert.ok(!h.lens());
     assert.equal(source.element.captures.size, 0);
     assert.deepEqual(h.visibleSegments(), initial);
@@ -1320,3 +1405,90 @@ for (const language of ["en", "zh"]) {
     );
   });
 }
+
+for (const id of ["academy-2-1", "academy-2-2", "academy-3-4"])
+  for (const phonePortrait of [false, true]) {
+    test(`Academy ${id} phone source artwork transfers only on a valid drop (${phonePortrait})`, () => {
+      const h = mount(id, { isPhone: true, phonePortrait });
+      const { from, to } = academy.getAcademySolution(h.lesson);
+      const source = currentSource(h);
+      const initial = h.visibleSegments();
+      assertSourceArtwork(source, false);
+      h.pointer(source, "Down", ...center(source));
+      assertPressedArtwork(h, source);
+      assert.equal(currentSource(h).props.className, source.props.className);
+      assert.deepEqual(
+        h.visibleSegments(),
+        initial,
+        "press is presentation-only",
+      );
+      const target = to ? h.segment(to) : h.byId("academy-reservoir");
+      h.pointer(source, "Move", ...center(target));
+      assertPressedArtwork(h, source);
+      assert.ok(h.lens(), "carried-match presentation remains available");
+      assert.deepEqual(
+        h.visibleSegments(),
+        initial,
+        "drag cannot commit early",
+      );
+      h.pointer(source, "Up", ...center(target));
+      assert.ok(h.success());
+      assertNoHiddenArtwork(h);
+      assertSourceArtwork(
+        to ? h.segment(to) : h.byId("academy-reservoir"),
+        false,
+      );
+      if (!from)
+        assert.equal(
+          matchArtwork(h.byId("academy-reservoir")).length,
+          0,
+          "used reservoir match is removed only after success",
+        );
+      assert.equal(source.element.captures.size, 0);
+      assert.ok(!h.lens());
+      assert.deepEqual(h.completed, [id]);
+      h.click(h.byId("academy-reset"));
+      assertSourceArtwork(currentSource(h), false);
+      assertNoHiddenArtwork(h);
+      assert.deepEqual(h.visibleSegments(), initial);
+    });
+  }
+
+test("Academy wrong-but-valid phone drop restores the add-reservoir artwork", () => {
+  const h = mount("academy-2-3", { isPhone: true });
+  const source = currentSource(h);
+  const initial = h.visibleSegments();
+  h.pointer(source, "Down", ...center(source));
+  assertPressedArtwork(h, source);
+  const wrongTarget = h.segment({ position: 0, segment: 2 });
+  h.pointer(source, "Move", ...center(wrongTarget));
+  assertPressedArtwork(h, source);
+  assert.ok(h.lens().props.stick.snapped);
+  h.pointer(source, "Up", ...center(wrongTarget));
+  assert.equal(h.status(), academyCopy.en.feedback["wrong-target"]);
+  assertSourceArtwork(currentSource(h), false);
+  assertNoHiddenArtwork(h);
+  assert.deepEqual(h.visibleSegments(), initial);
+  assert.deepEqual(h.completed, []);
+  assert.equal(source.element.captures.size, 0);
+});
+
+test("Academy locked sources and solved destinations never hide their artwork", () => {
+  const h = mount("academy-6-1", { isPhone: true });
+  const locked = h.segment({ position: 0, segment: 5 });
+  assert.ok(locked.props.disabled);
+  h.pointer(locked, "Down", ...center(locked));
+  assertSourceArtwork(h.segment({ position: 0, segment: 5 }), false);
+  assertNoHiddenArtwork(h);
+  assert.ok(!h.lens());
+  assert.equal(locked.element.captures.size, 0);
+  clickSolution(h);
+  const { to } = academy.getAcademySolution(h.lesson);
+  const solved = h.segment(to);
+  assert.ok(solved.props.disabled);
+  h.pointer(solved, "Down", ...center(solved));
+  assertSourceArtwork(h.segment(to), false);
+  assertNoHiddenArtwork(h);
+  assert.ok(!h.lens());
+  assert.equal(solved.element.captures.size, 0);
+});

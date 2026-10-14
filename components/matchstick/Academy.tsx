@@ -695,6 +695,7 @@ export function AcademyLessonView({
                   rotatedClockwise={phonePortrait}
                   directions={Array(7).fill(false)}
                   selected={segmentSelection}
+                  hiddenSource={drag?.touchMagnifier ? drag.from : null}
                   selectionActive={selectionActive}
                   interactionLocked={!interactive}
                   canSelectSegment={(p, s) =>
@@ -768,7 +769,14 @@ export function AcademyLessonView({
             >
               {(lesson.mode === "add" && !solved) ||
               (lesson.mode === "remove" && solved) ? (
-                <MatchstickArt orientation="horizontal" />
+                <MatchstickArt
+                  orientation="horizontal"
+                  sourceHidden={
+                    interactive &&
+                    lesson.mode === "add" &&
+                    Boolean(drag?.touchMagnifier && drag.from === null)
+                  }
+                />
               ) : (
                 <span aria-hidden="true">↙</span>
               )}

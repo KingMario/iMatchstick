@@ -146,3 +146,53 @@ test("magnifier has no server-rendered interactive copy or document dependency",
     "",
   );
 });
+
+test("magnifier scene preserves hidden source art instead of duplicating the carried stick", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const art = new DecorativeNode("svg", { class: "matchstick-art" });
+  const button = new DecorativeNode(
+    "BUTTON",
+    { class: "match-segment visible" },
+    [art],
+  );
+  const source = new DecorativeNode("DIV", { class: "equation" }, [button]);
+  let sourceHidden = true;
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      getComputedStyle: (original: DecorativeNode) => ({
+        0: "visibility",
+        length: 1,
+        getPropertyValue: () =>
+          original === art && sourceHidden ? "hidden" : "visible",
+      }),
+    },
+  });
+  try {
+    const snapshot = () =>
+      copyMagnifierSurface(
+        source as unknown as HTMLElement,
+      ) as unknown as DecorativeNode;
+    const held = snapshot();
+    assert.equal(held.children[0].styles.get("visibility"), "visible");
+    assert.equal(
+      held.children[0].children[0].styles.get("visibility"),
+      "hidden",
+    );
+    assert.equal(
+      button.hasAttribute("disabled"),
+      false,
+      "live source keeps pointer capture",
+    );
+    sourceHidden = false;
+    const restored = snapshot();
+    assert.equal(
+      restored.children[0].children[0].styles.get("visibility"),
+      "visible",
+    );
+  } finally {
+    if (originalWindow)
+      Object.defineProperty(globalThis, "window", originalWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});

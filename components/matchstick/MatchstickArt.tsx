@@ -1,13 +1,20 @@
 type Props = {
   orientation: "horizontal" | "vertical";
   reversed?: boolean;
+  /** Keep source geometry and its owning control intact while the lens carries it. */
+  sourceHidden?: boolean;
 };
 
-export function MatchstickArt({ orientation, reversed = false }: Props) {
+export function MatchstickArt({
+  orientation,
+  reversed = false,
+  sourceHidden = false,
+}: Props) {
   const vertical = orientation === "vertical";
   return (
     <svg
       className="matchstick-art"
+      style={sourceHidden ? { visibility: "hidden" } : undefined}
       viewBox={vertical ? "0 0 68 240" : "0 0 240 68"}
       aria-hidden="true"
       focusable="false"

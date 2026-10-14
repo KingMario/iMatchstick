@@ -1253,6 +1253,7 @@ export function MatchstickGame() {
                           solved ? successFeedback?.destination : null
                         }
                         selected={selected}
+                        hiddenSource={touchPreview?.from ?? null}
                         selectionActive={
                           pendingSource !== null || selected !== null
                         }

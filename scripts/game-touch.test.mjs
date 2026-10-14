@@ -11,7 +11,8 @@ const matchstick = require("../.test-out/lib/matchstick.js");
 const compiled = new Map();
 // Executed component-handler tests, NOT native-browser, CSS/layout, or device
 // coverage. React hooks, DOM rectangles/capture, timers, and presentation children
-// are modeled. MatchstickGame, MatchstickChar, drag, and legality are real code.
+// are modeled. MatchstickGame, MatchstickChar, MatchstickArt, drag, and legality
+// are real code. SVG visibility is checked as rendered, not by matching source text.
 function mount({ portrait = true, hand = "right", phone = true } = {}) {
   const state = [],
     effects = [],
@@ -278,7 +279,10 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
             return require(`../.test-out/${resolved}.js`);
           if (resolved === "components/matchstick/copy")
             return require(`../.test-out/${resolved}.js`);
-          if (resolved === "components/matchstick/MatchstickChar")
+          if (
+            resolved === "components/matchstick/MatchstickChar" ||
+            resolved === "components/matchstick/MatchstickArt"
+          )
             return load(`${resolved}.tsx`);
           if (resolved.startsWith("components/matchstick/")) {
             const name = posix.basename(resolved);
@@ -372,9 +376,63 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
   };
 }
 
+function matchArtwork(node) {
+  if (!node || typeof node !== "object") return [];
+  if (Array.isArray(node)) return node.flatMap(matchArtwork);
+  return [
+    ...(node.type === "svg" && node.props.className === "matchstick-art"
+      ? [node]
+      : []),
+    ...matchArtwork(node.props?.children),
+  ];
+}
+function assertSourceArtwork(node, hidden) {
+  assert.equal(node.type, "button", "source button stays mounted");
+  const artwork = matchArtwork(node);
+  assert.equal(artwork.length, 1, "source still owns its SVG artwork");
+  assert.equal(artwork[0].props.style?.visibility === "hidden", hidden);
+  assert.notEqual(node.props.style?.visibility, "hidden", "hide only the art");
+  assert.notEqual(node.props.style?.display, "none", "keep the hit target");
+  assert.notEqual(node.props.style?.opacity, 0, "keep the hit target visible");
+}
+function assertNoHiddenArtwork(game) {
+  assert.ok(
+    game
+      .nodes()
+      .filter((node) => node.type === "svg")
+      .every((node) => node.props.style?.visibility !== "hidden"),
+    "cleared gesture cannot leave stale hidden source artwork",
+  );
+}
+
 function begin(game, from = [4, 3], pointerType = "touch") {
   const source = game.segment(...from);
+  assertSourceArtwork(source, false);
   game.pointer(source, "Down", game.center(source), pointerType);
+  const pressed = game.segment(...from);
+  assertSourceArtwork(pressed, game.phone && pointerType === "touch");
+  assert.equal(
+    pressed.element,
+    source.element,
+    "touch keeps the capture owner",
+  );
+  assert.equal(pressed.props.disabled, false, "press does not lock the source");
+  assert.equal(
+    pressed.props.className,
+    source.props.className,
+    "press does not select or remove the match",
+  );
+  assert.ok(pressed.element.captures.has(7));
+  assert.equal(
+    game
+      .nodes()
+      .filter(
+        (node) =>
+          node.type === "svg" && node.props.style?.visibility === "hidden",
+      ).length,
+    game.phone && pointerType === "touch" ? 1 : 0,
+    "only the pressed phone-touch source artwork is hidden",
+  );
   assert.equal(
     Boolean(game.lens()),
     game.phone && pointerType === "touch",
@@ -388,6 +446,10 @@ function drag(game, from = [4, 3], to = [4, 5], pointerType = "touch") {
     target = game.segment(...to),
     point = game.center(target);
   game.pointer(source, "Move", point, pointerType);
+  assertSourceArtwork(
+    game.segment(...from),
+    game.phone && pointerType === "touch",
+  );
   return { source: game.segment(...from), point, target };
 }
 
@@ -410,10 +472,22 @@ for (const portrait of [false, true])
         target.props["data-screen-orientation"],
       );
       g.pointer(source, "Up", point);
+      assertNoHiddenArtwork(g);
       assert.ok(!g.lens());
       assert.ok(!g.ghost());
       assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=2"));
       assert.equal(g.byType("GameControls").props.solved, true);
+      assertSourceArtwork(g.segment(4, 5), false);
+      assert.ok(
+        !g
+          .nodes()
+          .some(
+            (node) =>
+              node.props?.["data-position"] === 4 &&
+              node.props?.["data-segment"] === 3,
+          ),
+        "successful source disappears from the solved expression",
+      );
     });
     test(`main phone touch orientation changes on first motion before wrong drop: ${label}`, () => {
       const g = mount({ portrait, hand });
@@ -428,9 +502,11 @@ for (const portrait of [false, true])
       );
       assert.equal(g.lens().props.stick.snapped, true);
       g.pointer(source, "Up", point);
+      assertNoHiddenArtwork(g);
       assert.ok(!g.lens());
       assert.equal(g.timers.size, 0, "touch has no return-animation timer");
       assert.equal(g.byType("GameControls").props.solved, false);
+      assertSourceArtwork(g.segment(0, 1), false);
       assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=3"));
     });
     test(`main phone touch unsnapped coordinates have zero offset: ${label}`, () => {
@@ -442,6 +518,8 @@ for (const portrait of [false, true])
       assert.equal(g.lens().props.stick.y, point.y);
       assert.equal(g.lens().props.stick.snapped, false);
       g.pointer(g.segment(4, 3), "Up", point);
+      assertSourceArtwork(g.segment(4, 3), false);
+      assertNoHiddenArtwork(g);
       assert.ok(!g.lens());
     });
   }
@@ -495,6 +573,7 @@ for (const mode of ["active", "pending"])
       };
       if (interruption === "timeout") for (let i = 0; i < 60; i++) g.tick();
       else g.act(actions[interruption]);
+      assertNoHiddenArtwork(g);
       assert.ok(!g.lens());
       assert.ok(!g.ghost());
       assert.equal(
@@ -525,6 +604,10 @@ for (const mode of ["active", "pending"])
         g.render();
         assert.equal(g.byType("GameControls").props.isLoading, false);
       }
+      if (interruption === "academy")
+        g.act(() => g.byType("Academy").props.onExit());
+      assertNoHiddenArtwork(g);
+      assertSourceArtwork(g.segment(4, 3), false);
     });
   }
 
@@ -536,6 +619,7 @@ for (const portrait of [false, true])
         point = { x: 2500, y: 1500 };
       g.pointer(source, "Move", point, "mouse");
       assert.ok(!g.lens());
+      assertSourceArtwork(g.segment(4, 3), false);
       const ghost = g.ghost();
       assert.ok(ghost);
       const rect = source.element.getBoundingClientRect();
@@ -551,7 +635,7 @@ for (const portrait of [false, true])
         !ghost.props.className.includes("snapped"),
         "unsnapped ghost retains CSS spin hook",
       );
-      assert.equal(ghost.props.children.props.orientation, "horizontal");
+      assert.equal(ghost.props.children.props.viewBox, "0 0 240 68");
       g.pointer(g.segment(4, 3), "Cancel", point, "mouse");
       assert.ok(g.ghost().props.className.includes("returning"));
       assert.ok([...g.timers.values()].some((timer) => timer.ms === 180));
@@ -566,6 +650,7 @@ test("desktop touch retains conventional helper rather than phone lens", () => {
   g.pointer(source, "Move", { x: 2500, y: 1500 });
   assert.ok(!g.lens());
   assert.ok(g.ghost());
+  assertSourceArtwork(g.segment(4, 3), false);
 });
 
 for (const portrait of [false, true]) {
@@ -582,6 +667,8 @@ for (const portrait of [false, true]) {
     assert.ok(!g.segment(4, 3).props.className.split(" ").includes("selected"));
     assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=3"));
     g.pointer(g.segment(4, 3), "Up", point);
+    assertSourceArtwork(g.segment(4, 3), false);
+    assertNoHiddenArtwork(g);
     assert.equal(source.element.captures.size, 0);
     g.pointer(g.segment(4, 3), "Move", { x: 2500, y: 1500 });
     assert.ok(!g.lens());
@@ -612,8 +699,10 @@ for (const portrait of [false, true]) {
     assert.equal(g.ghost().props.style.left, targetPoint.x);
     assert.equal(g.ghost().props.style.top, targetPoint.y);
     assert.equal(
-      g.ghost().props.children.props.orientation,
-      target.props["data-screen-orientation"],
+      g.ghost().props.children.props.viewBox,
+      target.props["data-screen-orientation"] === "vertical"
+        ? "0 0 68 240"
+        : "0 0 240 68",
     );
     g.pointer(g.segment(4, 3), "Up", pointerPoint, "mouse");
     assert.ok(!g.ghost());
@@ -629,6 +718,9 @@ for (const portrait of [false, true])
       const centerPoint = g.center(source);
       const point = { x: centerPoint.x + 2, y: centerPoint.y + 2 };
       g.pointer(source, "Down", point);
+      assertSourceArtwork(g.segment(4, 3), true);
+      assert.equal(g.segment(4, 3).element, source.element);
+      assert.equal(g.segment(4, 3).props.disabled, false);
       const lens = g.lens();
       assert.ok(lens, "no pointermove is needed to render the lens");
       assert.equal(lens.props.point.x, point.x);
@@ -649,6 +741,8 @@ for (const portrait of [false, true])
       assert.ok(source.element.captures.has(7));
 
       g.pointer(g.segment(4, 3), "Up", point);
+      assertSourceArtwork(g.segment(4, 3), false);
+      assertNoHiddenArtwork(g);
       assert.ok(!g.lens());
       assert.ok(!g.ghost());
       assert.equal(source.element.captures.size, 0);
@@ -682,6 +776,8 @@ for (const mode of ["pending", "active"]) {
     const foreignPoint = { x: 2500, y: 1500 };
     for (const phase of ["Down", "Move", "Up", "Cancel"]) {
       g.pointer(secondary, phase, foreignPoint, "touch", 99);
+      assertSourceArtwork(g.segment(4, 3), true);
+      assertSourceArtwork(g.segment(0, 1), false);
       assert.ok(
         g.lens(),
         `${phase} from another pointer cannot dismiss the lens`,
@@ -694,6 +790,8 @@ for (const mode of ["pending", "active"]) {
     }
     g.act(() => g.root().props.onLostPointerCapture({ pointerId: 99 }));
     assert.ok(g.lens(), "foreign lostcapture cannot dismiss the primary lens");
+    assertSourceArtwork(g.segment(4, 3), true);
+    assertSourceArtwork(g.segment(0, 1), false);
     assert.deepEqual({ ...g.lens().props.point }, point);
     const target = g.segment(4, 5);
     g.pointer(g.segment(4, 3), "Move", g.center(target));
@@ -707,6 +805,8 @@ for (const mode of ["pending", "active"]) {
     const g = mount();
     const source = mode === "active" ? drag(g).source : begin(g);
     g.pointer(source, "Up", { x: -1000, y: -1000 });
+    assertSourceArtwork(g.segment(4, 3), false);
+    assertNoHiddenArtwork(g);
     assert.ok(!g.lens());
     assert.ok(!g.ghost());
     assert.equal(source.element.captures.size, 0);
@@ -721,6 +821,8 @@ test("main touch press released over a legal target without moving never commits
   const source = begin(g);
   const target = g.segment(4, 5);
   g.pointer(source, "Up", g.center(target));
+  assertSourceArtwork(g.segment(4, 3), false);
+  assertNoHiddenArtwork(g);
   assert.ok(!g.lens());
   assert.equal(source.element.captures.size, 0);
   assert.equal(g.byType("GameControls").props.solved, false);
@@ -742,4 +844,42 @@ test("main desktop mouse press and small movement retain ordinary tap selection"
   assert.ok(g.segment(4, 3).props.className.split(" ").includes("selected"));
   g.click(g.segment(4, 5));
   assert.equal(g.byType("GameControls").props.solved, true);
+});
+
+test("main locked and nonmovable source handlers cannot hide artwork", () => {
+  const g = mount();
+  const locked = g
+    .nodes()
+    .find(
+      (node) =>
+        node.type === "button" &&
+        node.props.disabled &&
+        node.props.className?.split(" ").includes("visible"),
+    );
+  assert.ok(locked, "puzzle has a nonmovable occupied match");
+  const press = (node) =>
+    g.act(() =>
+      node.props.onPointerDown({
+        pointerId: 7,
+        pointerType: "touch",
+        button: 0,
+        currentTarget: node.element,
+        clientX: g.center(node).x,
+        clientY: g.center(node).y,
+        preventDefault() {},
+      }),
+    );
+  press(locked); // Call the guard even though a native disabled button cannot fire.
+  assertNoHiddenArtwork(g);
+  assert.ok(!g.lens());
+  assert.equal(locked.element.captures.size, 0);
+  const { source, point } = drag(g);
+  g.pointer(source, "Up", point);
+  const solved = g.segment(4, 5);
+  assert.ok(solved.props.disabled, "solved board is interaction-locked");
+  press(solved);
+  assertSourceArtwork(g.segment(4, 5), false);
+  assertNoHiddenArtwork(g);
+  assert.ok(!g.lens());
+  assert.equal(solved.element.captures.size, 0);
 });

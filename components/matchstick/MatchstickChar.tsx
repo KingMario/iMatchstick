@@ -18,6 +18,8 @@ type MatchstickCharProps = {
   successDestination?: SelectedSegment | null;
   solved?: boolean;
   selected: SelectedSegment | null;
+  /** Presentation only: the phone touch lens owns this source's visible artwork. */
+  hiddenSource?: SelectedSegment | null;
   selectionActive: boolean;
   interactionLocked: boolean;
   onSegmentClick: (position: number, segment: number, visible: boolean) => void;
@@ -50,6 +52,7 @@ export function MatchstickChar({
   successDestination,
   solved,
   selected,
+  hiddenSource,
   selectionActive,
   interactionLocked,
   onSegmentClick,
@@ -167,6 +170,11 @@ export function MatchstickChar({
               <MatchstickArt
                 orientation={orientation}
                 reversed={directions[segment]}
+                sourceHidden={
+                  actionable &&
+                  hiddenSource?.position === position &&
+                  hiddenSource.segment === segment
+                }
               />
             ) : null}
           </button>
