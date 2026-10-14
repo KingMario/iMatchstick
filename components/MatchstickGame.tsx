@@ -26,7 +26,7 @@ import { MatchstickChar } from "@/components/matchstick/MatchstickChar";
 import { StatsBar } from "@/components/matchstick/StatsBar";
 import { SuccessConfetti } from "@/components/matchstick/SuccessConfetti";
 import { usePwaUpdate } from "@/components/matchstick/usePwaUpdate";
-import { playApplause } from "@/lib/audio";
+import { playApplause, pauseApplause } from "@/lib/audio";
 import { readJson, writeJson } from "@/lib/clientStorage";
 import { Academy } from "@/components/matchstick/Academy";
 import { academyLessons } from "@/lib/academy";
@@ -76,7 +76,11 @@ import {
   parseSpokenExpression,
 } from "@/lib/speech";
 
-import { createVoiceSession, type VoiceSession } from "@/lib/voiceSession";
+import {
+  createVoiceSession,
+  type VoiceSession,
+  type VoicePhase,
+} from "@/lib/voiceSession";
 
 type Stats = {
   solved: number;
@@ -94,6 +98,14 @@ type MessageKey =
   | "voiceNoMatch"
   | "voiceUnsupported"
   | "voicePermission"
+  | "voiceStopping"
+  | "voiceRecovery"
+  | "voiceStartFailed"
+  | "voiceRetry"
+  | "voiceNoSpeech"
+  | "voiceNetwork"
+  | "voiceAudioUnavailable"
+  | "voiceInterrupted"
   | "loadFailed";
 
 type DragState =
@@ -163,6 +175,7 @@ export function MatchstickGame() {
   const [stats, setStats] = useState<Stats>(initialStats);
   const [drag, setDrag] = useState<DragState>(null);
   const [listening, setListening] = useState(false);
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>("starting");
   const [voiceCaption, setVoiceCaption] = useState<{
     text: string;
     final: boolean;
@@ -182,7 +195,9 @@ export function MatchstickGame() {
   const dragRef = useRef<DragState>(null);
   const dragReturnTimer = useRef<number | null>(null);
   const applauseAudio = useRef<HTMLAudioElement | null>(null);
+  const pendingApplause = useRef<VoiceSession | null>(null);
   const voiceSession = useRef<VoiceSession | null>(null);
+  const voiceFeedbackActive = useRef(false);
   const equationRef = useRef<HTMLDivElement>(null);
   const gameHeaderRef = useRef<HTMLDivElement>(null);
 
@@ -244,9 +259,6 @@ export function MatchstickGame() {
     );
     setAcademyProgress(academy.progress);
     setAcademyView(academy.showWelcome ? "welcome" : null);
-    applauseAudio.current = new Audio("./hurrah.mp3");
-    applauseAudio.current.preload = "auto";
-    applauseAudio.current.load();
 
     const savedSettings = readJson(settingsKey, {
       language: "zh" as Language,
@@ -293,7 +305,7 @@ export function MatchstickGame() {
       if (dragReturnTimer.current !== null) {
         window.clearTimeout(dragReturnTimer.current);
       }
-      voiceSession.current?.cancel();
+      voiceSession.current?.dispose();
       voiceSession.current = null;
       const current = dragRef.current ?? pendingDrag.current;
       dragRef.current = null;
@@ -528,6 +540,7 @@ export function MatchstickGame() {
   }
 
   function solve(nextExpression: string) {
+    const recognition = voiceSession.current;
     clearDragReturnTimer();
     cancelVoice();
     const isNewAnswer = !solvedAnswers.includes(nextExpression);
@@ -541,7 +554,12 @@ export function MatchstickGame() {
     );
 
     if (soundEnabled && isNewAnswer) {
-      playApplause(applauseAudio.current);
+      if (recognition && !recognition.released) {
+        // Preserve sound preference, but never compete with a closing mic.
+        pendingApplause.current = recognition;
+      } else {
+        applauseAudio.current = playApplause(applauseAudio.current);
+      }
     }
 
     setDisplayExpression(nextExpression);
@@ -587,8 +605,9 @@ export function MatchstickGame() {
   }
 
   function cancelVoice() {
+    voiceFeedbackActive.current = false;
+    pendingApplause.current = null;
     const session = voiceSession.current;
-    voiceSession.current = null;
     session?.cancel();
     setListening(false);
     setVoiceCaption(null);
@@ -597,6 +616,13 @@ export function MatchstickGame() {
   function startVoiceAnswer() {
     // Cancellation must remain possible even if the timer expires this frame.
     if (voiceSession.current) {
+      if (voiceSession.current.closing) {
+        voiceFeedbackActive.current = true;
+        setMessageKey(
+          voicePhase === "blocked" ? "voiceRecovery" : "voiceStopping",
+        );
+        return;
+      }
       cancelVoice();
       setMessageKey(getSelectionMessageKey(Boolean(selected)));
       return;
@@ -607,6 +633,9 @@ export function MatchstickGame() {
       setMessageKey("voiceUnsupported");
       return;
     }
+    pauseApplause(applauseAudio.current);
+    voiceFeedbackActive.current = true;
+    setVoicePhase("starting");
     setListening(true);
     setVoiceCaption({ text: "", final: false });
     setMessageKey("voiceListening");
@@ -614,6 +643,31 @@ export function MatchstickGame() {
       Recognition,
       language === "zh" ? "zh-CN" : "en-US",
       {
+        phase: (phase) => {
+          if (voiceSession.current !== session) return;
+          setVoicePhase(phase);
+          if (phase === "blocked" && pendingApplause.current === session) {
+            pendingApplause.current = null;
+          }
+          if (phase === "blocked" && voiceFeedbackActive.current) {
+            setListening(false);
+            setVoiceCaption(null);
+            setMessageKey("voiceRecovery");
+          }
+        },
+        released: () => {
+          if (voiceSession.current !== session) return;
+          voiceSession.current = null;
+          if (pendingApplause.current === session) {
+            pendingApplause.current = null;
+            applauseAudio.current = playApplause(applauseAudio.current);
+          }
+          setMessageKey((current) =>
+            current === "voiceStopping" || current === "voiceRecovery"
+              ? "voiceRetry"
+              : current,
+          );
+        },
         transcript: (value, final) => {
           if (voiceSession.current !== session || loadingRef.current) return;
           setVoiceCaption({ text: value, final });
@@ -631,6 +685,7 @@ export function MatchstickGame() {
                 expression !== null && isAnswer(expression, puzzle.answers),
             );
           if (answer?.expression) {
+            session.complete();
             solve(answer.expression);
             setVoiceCaption({ text: answer.transcript, final: true });
           } else {
@@ -639,7 +694,6 @@ export function MatchstickGame() {
         },
         finish: (reason, error) => {
           if (voiceSession.current !== session) return;
-          voiceSession.current = null;
           setListening(false);
           setVoiceCaption((current) =>
             reason === "end" && current ? { ...current, final: true } : null,
@@ -647,7 +701,17 @@ export function MatchstickGame() {
           setMessageKey(
             error === "not-allowed" || error === "service-not-allowed"
               ? "voicePermission"
-              : "voiceNoMatch",
+              : error === "network"
+                ? "voiceNetwork"
+                : error === "audio-capture"
+                  ? "voiceAudioUnavailable"
+                  : error === "no-speech"
+                    ? "voiceNoSpeech"
+                    : error === "aborted"
+                      ? "voiceInterrupted"
+                      : reason === "start-timeout" || reason === "start-error"
+                        ? "voiceStartFailed"
+                        : "voiceNoMatch",
           );
         },
       },
@@ -1165,13 +1229,13 @@ export function MatchstickGame() {
                           {solved && successFeedback
                             ? `✓ ${text.successResults[successFeedback.kind]}`
                             : listening
-                              ? text.voiceCaptionListening
+                              ? text.voice
                               : text.voiceCaptionHeard}
                         </strong>
                         <span title={voiceCaption.text}>
                           {voiceCaption.text ||
                             (listening
-                              ? text.voiceCaptionPrompt
+                              ? text.voicePhases[voicePhase]
                               : text.voiceCaptionEmpty)}
                         </span>
                       </div>
@@ -1394,7 +1458,13 @@ export function MatchstickGame() {
               setTimerEnabled(enabled);
               setTimeLeft(60);
             }}
-            onSoundChange={setSoundEnabled}
+            onSoundChange={(enabled) => {
+              setSoundEnabled(enabled);
+              if (!enabled) {
+                pendingApplause.current = null;
+                pauseApplause(applauseAudio.current);
+              }
+            }}
             onShare={sharePuzzle}
             onClearStats={clearStats}
             onOpenAcademy={openAcademy}

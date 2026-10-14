@@ -3,10 +3,21 @@ import type {
   SpeechRecognitionLike,
 } from "./speech";
 
-export type VoiceFinish = "end" | "error" | "start-error" | "timeout";
+export type VoiceFinish =
+  "end" | "error" | "start-error" | "start-timeout" | "timeout";
+export type VoicePhase =
+  | "starting"
+  | "started"
+  | "audio"
+  | "speech"
+  | "speech-ended"
+  | "audio-ended"
+  | "result"
+  | "stopping"
+  | "blocked";
 
-// Each attempt owns its callbacks. Detach BEFORE abort: some engines deliver
-// error/end synchronously, others deliver them after a new attempt has begun.
+// Answer eligibility and native service ownership are deliberately separate.
+// abort() requests shutdown; only end confirms that the service disconnected.
 export function createVoiceSession(
   Recognition: SpeechRecognitionConstructor,
   language: string,
@@ -14,40 +25,135 @@ export function createVoiceSession(
     transcript: (text: string, final: boolean) => void;
     answer: (transcripts: string[]) => void;
     finish: (reason: VoiceFinish, error?: string) => void;
+    phase?: (phase: VoicePhase) => void;
+    released?: () => void;
   },
 ) {
   let recognition: SpeechRecognitionLike | null = null;
-  let active = true;
+  let eligible = true;
+  let closing = false;
+  let released = false;
+  let requested = false;
+  let started = false;
+  let terminal = false;
   let watchdog: ReturnType<typeof setTimeout> | null = null;
-  const detach = () => {
-    active = false;
+  let shutdownWatchdog: ReturnType<typeof setTimeout> | null = null;
+  const clearWatchdog = () => {
     if (watchdog !== null) clearTimeout(watchdog);
     watchdog = null;
+  };
+  const finish = (reason: VoiceFinish, error?: string) => {
+    if (terminal) return;
+    terminal = true;
+    callbacks.finish(reason, error);
+  };
+  const detach = () => {
+    clearWatchdog();
+    if (shutdownWatchdog !== null) clearTimeout(shutdownWatchdog);
+    shutdownWatchdog = null;
     if (recognition) {
-      recognition.onresult = null;
-      recognition.onerror = null;
-      recognition.onend = null;
+      recognition.onresult = recognition.onerror = recognition.onend = null;
+      recognition.onstart =
+        recognition.onaudiostart =
+        recognition.onaudioend =
+          null;
+      recognition.onspeechstart = recognition.onspeechend = null;
     }
   };
-  const cancel = () => {
+  const release = () => {
+    if (released) return;
+    released = true;
+    eligible = false;
     detach();
+    callbacks.released?.();
+  };
+  const cancel = () => {
+    if (released || closing) return;
+    eligible = false;
+    closing = true;
+    clearWatchdog();
+    if (recognition) recognition.onresult = null;
+    callbacks.phase?.("stopping");
+    shutdownWatchdog = setTimeout(() => {
+      if (!released) callbacks.phase?.("blocked");
+      // Keep end attached. A timeout is NOT evidence that native audio released.
+    }, 5000);
     try {
       recognition?.abort();
     } catch {
-      /* Already stopped by the browser. */
+      /* Wait for end or show recovery. */
     }
+  };
+  const complete = () => {
+    if (released || closing) return;
+    eligible = false;
+    closing = true;
+    clearWatchdog();
+    if (recognition) recognition.onresult = null;
+    callbacks.phase?.("stopping");
+    // A non-continuous final result already asks WebKit to stop. Do not abort
+    // reentrantly inside that result dispatch; observe its natural end first.
+    shutdownWatchdog = setTimeout(() => {
+      if (released) return;
+      shutdownWatchdog = setTimeout(() => {
+        if (!released) callbacks.phase?.("blocked");
+      }, 5000);
+      try {
+        recognition?.abort();
+      } catch {
+        /* End still owns release. */
+      }
+    }, 5000);
+  };
+  const phase = (value: VoicePhase) => {
+    if (!eligible || released) return;
+    callbacks.phase?.(value);
   };
   return {
     cancel,
+    complete,
+    get closing() {
+      return closing;
+    },
+    get released() {
+      return released;
+    },
+    // Unmount cannot await end; discard UI callbacks and request native shutdown.
+    dispose() {
+      eligible = false;
+      released = true;
+      detach();
+      try {
+        recognition?.abort();
+      } catch {}
+    },
     start() {
+      if (requested || released || closing) return;
+      requested = true;
       try {
         recognition = new Recognition();
         recognition.lang = language;
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.maxAlternatives = 5;
+        recognition.onstart = () => {
+          if (!eligible || released || started) return;
+          started = true;
+          phase("started");
+          clearWatchdog();
+          watchdog = setTimeout(() => {
+            if (!eligible) return;
+            finish("timeout");
+            cancel();
+          }, 30000);
+        };
+        recognition.onaudiostart = () => phase("audio");
+        recognition.onspeechstart = () => phase("speech");
+        recognition.onspeechend = () => phase("speech-ended");
+        recognition.onaudioend = () => phase("audio-ended");
         recognition.onresult = (event) => {
-          if (!active) return;
+          if (!eligible || released) return;
+          phase("result");
           const captions: string[] = [];
           const candidates: string[] = [];
           let combined = [""];
@@ -83,29 +189,29 @@ export function createVoiceSession(
           }
           callbacks.transcript(captions.join(" ").trim(), allFinal);
           if (allFinal && finalCount > 1) candidates.unshift(...combined);
-          if (candidates.length && active) callbacks.answer(candidates);
+          if (candidates.length && eligible) callbacks.answer(candidates);
         };
         recognition.onerror = (event) => {
-          if (!active) return;
+          if (!eligible || released) return;
+          finish("error", event.error);
           cancel();
-          callbacks.finish("error", event.error);
         };
         recognition.onend = () => {
-          if (!active) return;
-          detach();
-          callbacks.finish("end");
+          if (released) return;
+          if (eligible) finish("end");
+          release();
         };
-        // Do not auto-restart the microphone. Recover even if a browser never
-        // delivers end/error, and let the next explicit tap create a new attempt.
+        callbacks.phase?.("starting");
         watchdog = setTimeout(() => {
-          if (!active) return;
+          if (!eligible) return;
+          finish("start-timeout");
           cancel();
-          callbacks.finish("timeout");
         }, 30000);
         recognition.start();
       } catch {
-        cancel();
-        callbacks.finish("start-error");
+        eligible = false;
+        finish("start-error");
+        release();
       }
     },
   };

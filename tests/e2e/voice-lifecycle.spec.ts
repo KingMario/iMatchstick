@@ -35,6 +35,11 @@ test.beforeEach(async ({ page }) => {
         onresult: ((event: unknown) => void) | null = null;
         onerror: ((event: unknown) => void) | null = null;
         onend: (() => void) | null = null;
+        onstart: (() => void) | null = null;
+        holdEnd = false;
+        hold(value: boolean) {
+          this.holdEnd = value;
+        }
         savedResult: ((event: unknown) => void) | null = null;
         savedEnd: (() => void) | null = null;
         constructor() {
@@ -43,6 +48,7 @@ test.beforeEach(async ({ page }) => {
         start() {
           this.savedResult = this.onresult;
           this.savedEnd = this.onend;
+          this.onstart?.();
         }
         abort() {
           this.onend?.();
@@ -57,6 +63,7 @@ test.beforeEach(async ({ page }) => {
               ),
             ],
           });
+          if (data.final && !this.holdEnd) setTimeout(() => this.onend?.(), 0);
         }
         late() {
           this.savedResult?.({
@@ -255,4 +262,40 @@ test("timer expiration cancels active voice and rejects a late answer", async ({
   await expect(page.locator(".equation-solved")).toHaveCount(0);
   await expect(mic).toHaveAttribute("aria-pressed", "false");
   await expect(page.locator(".voice-caption")).toHaveCount(0);
+});
+
+test("a new question cannot acquire recognition before the prior native end", async ({
+  page,
+}) => {
+  const mic = page.locator(".play-controls button").last();
+  await mic.click();
+  await emit(page, "hold", true);
+  await emit(page, "result", { values: ["7-5=2"], final: true });
+  await expect(page.locator(".equation-solved")).toHaveCount(1);
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await mic.click();
+  await expect(page.locator(".status-copy")).toContainText(
+    "Releasing microphone",
+  );
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { voiceInstances: unknown[] }).voiceInstances
+          .length,
+    ),
+  ).toBe(1);
+  await emit(page, "end", null, 0);
+  await mic.click();
+  expect(
+    await page.evaluate(
+      () =>
+        (window as unknown as { voiceInstances: unknown[] }).voiceInstances
+          .length,
+    ),
+  ).toBe(2);
+  await emit(page, "result", { values: ["3+1=4"], final: true });
+  await expect(page.locator(".equation")).toHaveAttribute(
+    "aria-label",
+    "3+1=4",
+  );
 });

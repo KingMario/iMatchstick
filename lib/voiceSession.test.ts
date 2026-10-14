@@ -15,11 +15,18 @@ class Recognition implements SpeechRecognitionLike {
   onresult: SpeechRecognitionLike["onresult"] = null;
   onerror: SpeechRecognitionLike["onerror"] = null;
   onend: SpeechRecognitionLike["onend"] = null;
+  onstart: SpeechRecognitionLike["onstart"] = null;
+  onaudiostart: SpeechRecognitionLike["onaudiostart"] = null;
+  onspeechstart: SpeechRecognitionLike["onspeechstart"] = null;
+  onspeechend: SpeechRecognitionLike["onspeechend"] = null;
+  onaudioend: SpeechRecognitionLike["onaudioend"] = null;
   aborts = 0;
   constructor() {
     Recognition.latest = this;
   }
-  start() {}
+  start() {
+    this.onstart?.();
+  }
   abort() {
     this.aborts++;
     this.onend?.();
@@ -153,4 +160,225 @@ it("recovers after 30 seconds without browser callbacks and cancels its timer", 
   next.session.cancel();
   context.mock.timers.tick(30000);
   assert.deepEqual(next.finishes, []);
+});
+
+it("keeps ownership after abort until asynchronous native end", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  class Delayed extends Recognition {
+    abort() {
+      this.aborts++;
+    }
+  }
+  let releases = 0;
+  const phases: string[] = [];
+  let submissions = 0;
+  const session = createVoiceSession(Delayed, "en-US", {
+    transcript() {},
+    answer() {
+      submissions++;
+    },
+    finish() {},
+    released() {
+      releases++;
+    },
+    phase(value) {
+      phases.push(value);
+    },
+  });
+  session.start();
+  const recognition = Recognition.latest;
+  const staleResult = recognition.onresult;
+  session.cancel();
+  assert.equal(session.closing, true);
+  assert.equal(session.released, false);
+  assert.notEqual(recognition.onend, null);
+  staleResult?.(result([{ values: ["7-5=2"], final: true }]));
+  assert.equal(submissions, 0);
+  session.start();
+  assert.equal(recognition.aborts, 1);
+  context.mock.timers.tick(5000);
+  assert.equal(phases.at(-1), "blocked");
+  assert.equal(session.released, false);
+  recognition.onend?.();
+  assert.equal(session.released, true);
+  assert.equal(releases, 1);
+  assert.equal(recognition.onend, null);
+});
+
+it("reports silent start separately, aborts once, and still waits for release", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  class Silent extends Recognition {
+    start() {}
+    abort() {
+      this.aborts++;
+    }
+  }
+  const phases: string[] = [],
+    finishes: string[] = [];
+  const session = createVoiceSession(Silent, "en-US", {
+    transcript() {},
+    answer() {},
+    finish(reason) {
+      finishes.push(reason);
+    },
+    phase(value) {
+      phases.push(value);
+    },
+  });
+  session.start();
+  assert.deepEqual(phases, ["starting"]);
+  context.mock.timers.tick(30000);
+  assert.deepEqual(finishes, ["start-timeout"]);
+  assert.equal(Recognition.latest.aborts, 1);
+  context.mock.timers.tick(5000);
+  assert.equal(phases.at(-1), "blocked");
+  assert.equal(session.released, false);
+  Recognition.latest.onend?.();
+  assert.equal(session.released, true);
+});
+
+it("reports observed native stages, never claims microphone open from start alone", () => {
+  const phases: string[] = [];
+  const session = createVoiceSession(Recognition, "en-US", {
+    transcript() {},
+    answer() {},
+    finish() {},
+    phase(value) {
+      phases.push(value);
+    },
+  });
+  session.start();
+  assert.deepEqual(phases, ["starting", "started"]);
+  Recognition.latest.onaudiostart?.();
+  Recognition.latest.onspeechstart?.();
+  Recognition.latest.onspeechend?.();
+  Recognition.latest.onaudioend?.();
+  assert.deepEqual(phases, [
+    "starting",
+    "started",
+    "audio",
+    "speech",
+    "speech-ended",
+    "audio-ended",
+  ]);
+  session.cancel();
+});
+
+it("three sessions complete with asynchronous result/abort/end ordering", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  class Delayed extends Recognition {
+    abort() {
+      this.aborts++;
+    }
+  }
+  let answers = 0,
+    releases = 0;
+  for (let index = 0; index < 3; index++) {
+    const session = createVoiceSession(Delayed, "en-US", {
+      transcript() {},
+      answer() {
+        answers++;
+        session.cancel();
+      },
+      finish() {},
+      released() {
+        releases++;
+      },
+    });
+    session.start();
+    const recognition = Recognition.latest,
+      late = recognition.onresult;
+    late?.(result([{ values: ["7-5=2"], final: true }]));
+    late?.(result([{ values: ["7-5=2"], final: true }]));
+    assert.equal(session.released, false);
+    recognition.onend?.();
+    assert.equal(session.released, true);
+    late?.(result([{ values: ["7-5=2"], final: true }]));
+  }
+  assert.equal(answers, 3);
+  assert.equal(releases, 3);
+});
+
+it("allows a first permission prompt to remain pending beyond eight seconds", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  class Permission extends Recognition {
+    start() {}
+  }
+  const phases: string[] = [],
+    finishes: string[] = [];
+  const session = createVoiceSession(Permission, "en-US", {
+    transcript() {},
+    answer() {},
+    finish(reason) {
+      finishes.push(reason);
+    },
+    phase(value) {
+      phases.push(value);
+    },
+  });
+  session.start();
+  context.mock.timers.tick(15000);
+  assert.deepEqual(finishes, []);
+  Recognition.latest.onstart?.();
+  assert.equal(phases.at(-1), "started");
+  session.cancel();
+});
+
+it("accepted final result waits for natural end without reentrant abort", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  let releases = 0;
+  const session = createVoiceSession(Recognition, "en-US", {
+    transcript() {},
+    answer() {
+      session.complete();
+    },
+    finish() {},
+    released() {
+      releases++;
+    },
+  });
+  session.start();
+  const recognition = Recognition.latest;
+  recognition.onresult?.(result([{ values: ["7-5=2"], final: true }]));
+  assert.equal(recognition.aborts, 0);
+  assert.equal(session.closing, true);
+  assert.equal(session.released, false);
+  session.cancel(); // puzzle reset cannot re-enter native final-result finishing
+  assert.equal(recognition.aborts, 0);
+  recognition.onend?.();
+  assert.equal(releases, 1);
+  context.mock.timers.tick(10000);
+  assert.equal(recognition.aborts, 0);
+});
+it("missing natural end triggers one bounded abort, never a new recognition start", (context) => {
+  context.mock.timers.enable({ apis: ["setTimeout"] });
+  class NoEnd extends Recognition {
+    abort() {
+      this.aborts++;
+    }
+  }
+  const phases: string[] = [];
+  const session = createVoiceSession(NoEnd, "en-US", {
+    transcript() {},
+    answer() {
+      session.complete();
+    },
+    finish() {},
+    phase(value) {
+      phases.push(value);
+    },
+  });
+  session.start();
+  const recognition = Recognition.latest;
+  recognition.onresult?.(result([{ values: ["7-5=2"], final: true }]));
+  context.mock.timers.tick(5000);
+  assert.equal(recognition.aborts, 1);
+  assert.equal(session.released, false);
+  context.mock.timers.tick(5000);
+  assert.equal(phases.at(-1), "blocked");
+  session.start();
+  session.cancel();
+  assert.equal(recognition.aborts, 1);
+  recognition.onend?.();
+  assert.equal(session.released, true);
 });

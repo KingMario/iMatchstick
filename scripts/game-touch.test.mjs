@@ -13,7 +13,14 @@ const compiled = new Map();
 // coverage. React hooks, DOM rectangles/capture, timers, and presentation children
 // are modeled. MatchstickGame, MatchstickChar, MatchstickArt, drag, and legality
 // are real code. SVG visibility is checked as rendered, not by matching source text.
-function mount({ portrait = true, hand = "right", phone = true } = {}) {
+function mount({
+  portrait = true,
+  hand = "right",
+  phone = true,
+  delayedAbort = false,
+  soundEnabled = false,
+  silentStart = false,
+} = {}) {
   const state = [],
     effects = [],
     cache = new Map(),
@@ -21,6 +28,7 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
   const timers = new Map(),
     intervals = new Map();
   const recognitions = [];
+  const audioEvents = [];
   let mountedRefs = new Set(),
     renderedRefs = new Set();
   let cursor = 0,
@@ -83,9 +91,11 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
       constructor() {
         recognitions.push(this);
       }
-      start() {}
+      start() {
+        if (!silentStart) this.onstart?.();
+      }
       abort() {
-        this.onend?.();
+        if (!delayedAbort) this.onend?.();
       }
       result(transcript, isFinal = false) {
         this.onresult?.({
@@ -262,7 +272,22 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
         URLSearchParams,
         navigator: { userAgent: phone ? "iPhone" : "desktop" },
         Audio: class {
-          load() {}
+          paused = true;
+          constructor() {
+            audioEvents.push("construct");
+          }
+          load() {
+            audioEvents.push("load");
+          }
+          pause() {
+            this.paused = true;
+            audioEvents.push("pause");
+          }
+          play() {
+            this.paused = false;
+            audioEvents.push("play");
+            return Promise.resolve();
+          }
         },
         require(name) {
           if (name === "react") return react;
@@ -280,7 +305,7 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
                       ...fallback,
                       language: "en",
                       dragHand: hand,
-                      soundEnabled: false,
+                      soundEnabled,
                     }
                   : fallback,
               writeJson() {},
@@ -306,7 +331,14 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
             };
           if (resolved === "components/matchstick/usePwaUpdate")
             return { usePwaUpdate: () => ({ status: "idle" }) };
-          if (["lib/drag", "lib/speech", "lib/voiceSession"].includes(resolved))
+          if (
+            [
+              "lib/drag",
+              "lib/speech",
+              "lib/voiceSession",
+              "lib/audio",
+            ].includes(resolved)
+          )
             return load(`${resolved}.ts`);
           if (resolved.startsWith("lib/"))
             return require(`../.test-out/${resolved}.js`);
@@ -394,6 +426,10 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
     document,
     timers,
     recognitions,
+    audioEvents,
+    unmount() {
+      for (const value of state) value?.cleanup?.();
+    },
     lens: () => nodes().find((n) => n.type === "TouchMagnifier"),
     ghost: () =>
       nodes().find((n) =>
@@ -1034,4 +1070,199 @@ test("main locked and nonmovable source handlers cannot hide artwork", () => {
   assertNoHiddenArtwork(g);
   assert.ok(!g.lens());
   assert.equal(solved.element.captures.size, 0);
+});
+
+test("sound-off iPhone voice repeats across three questions with zero media calls", async () => {
+  const g = mount({ phone: true, soundEnabled: false, delayedAbort: true });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+    assert.equal(g.recognitions.length, attempt + 1);
+    const recognition = g.recognitions[attempt];
+    const late = recognition.onresult;
+    g.act(() => recognition.result("7 minus 5 equals 2", true));
+    assert.equal(g.byType("GameControls").props.solved, true);
+    assert.ok(recognition.onend, "native completion handler remains attached");
+    g.act(() => g.byType("GameControls").props.onNewPuzzle());
+    await Promise.resolve();
+    g.render();
+    g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+    assert.equal(
+      g.recognitions.length,
+      attempt + 1,
+      "no overlapping start before end",
+    );
+    g.act(() =>
+      late?.({
+        resultIndex: 0,
+        results: [Object.assign([{ transcript: "7-5=2" }], { isFinal: true })],
+      }),
+    );
+    assert.equal(g.byType("GameControls").props.solved, false);
+    g.act(() => recognition.end());
+  }
+  assert.equal(g.audioEvents.filter((event) => event === "play").length, 0);
+  assert.equal(g.audioEvents.filter((event) => event === "pause").length, 0);
+  assert.deepEqual(
+    g.audioEvents,
+    [],
+    "sound off never constructs, loads, plays, pauses or seeks HTML audio",
+  );
+});
+
+test("native silent start has bounded visible recovery and never auto-restarts", () => {
+  const g = mount({ delayedAbort: true, silentStart: true });
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  const caption = () =>
+    g.nodes().find((node) => node.props?.className === "voice-caption");
+  assert.match(JSON.stringify(caption()), /Starting voice/);
+  const startTimer = [...g.timers.values()].find((timer) => timer.ms === 30000);
+  assert.ok(startTimer);
+  g.act(startTimer.fn);
+  assert.equal(g.byType("GameControls").props.listening, false);
+  const shutdownTimer = [...g.timers.values()].find(
+    (timer) => timer.ms === 5000,
+  );
+  assert.ok(shutdownTimer);
+  g.act(shutdownTimer.fn);
+  assert.match(
+    JSON.stringify(g.nodes().filter((n) => n.props?.role === "status")),
+    /Voice stalled/,
+  );
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  assert.equal(g.recognitions.length, 1);
+  g.act(() => g.recognitions[0].end());
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  assert.equal(
+    g.recognitions.length,
+    2,
+    "explicit tap after late end can retry",
+  );
+});
+
+test("old native shutdown timeout does not overwrite a new puzzle or selection", async () => {
+  const g = mount({ delayedAbort: true });
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  g.act(() => g.byType("GameControls").props.onNewPuzzle());
+  await Promise.resolve();
+  g.render();
+  const before = JSON.stringify(
+    g.nodes().filter((node) => node.props?.role === "status"),
+  );
+  const releaseTimer = [...g.timers.values()].find(
+    (timer) => timer.ms === 5000,
+  );
+  assert.ok(releaseTimer);
+  g.act(releaseTimer.fn);
+  assert.equal(
+    JSON.stringify(g.nodes().filter((node) => node.props?.role === "status")),
+    before,
+  );
+  assert.equal(g.recognitions.length, 1);
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  assert.match(
+    JSON.stringify(g.nodes().filter((node) => node.props?.role === "status")),
+    /Voice stalled/,
+  );
+});
+
+test("touch success during iPhone recognition never starts competing applause", () => {
+  const g = mount({ soundEnabled: true, delayedAbort: true });
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  g.click(g.segment(4, 3));
+  g.click(g.segment(4, 5));
+  assert.equal(g.byType("GameControls").props.solved, true);
+  assert.ok(g.recognitions[0].onend);
+  assert.equal(g.audioEvents.filter((event) => event === "play").length, 0);
+  g.act(() => g.recognitions[0].end());
+  assert.equal(
+    g.audioEvents.filter((event) => event === "play").length,
+    1,
+    "sound is deferred until native end, not disabled",
+  );
+});
+
+test("ordinary touch applause is preserved and playing audio is stopped before voice", () => {
+  const g = mount({ soundEnabled: true });
+  g.click(g.segment(4, 3));
+  g.click(g.segment(4, 5));
+  assert.equal(g.audioEvents.filter((event) => event === "play").length, 1);
+  g.act(() => g.byType("GameControls").props.onUndo());
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  assert.deepEqual(g.audioEvents, ["construct", "play", "pause"]);
+});
+
+for (const interruption of ["new", "settings-mute", "hidden", "unmount"]) {
+  test(`queued success audio is discarded on ${interruption} before late native end`, async () => {
+    const g = mount({ soundEnabled: true, delayedAbort: true });
+    g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+    const recognition = g.recognitions[0];
+    g.act(() => recognition.result("7-5=2", true));
+    const lateEnd = recognition.onend;
+    assert.deepEqual(g.audioEvents, []);
+    if (interruption === "new") {
+      g.act(() => g.byType("GameControls").props.onNewPuzzle());
+      await Promise.resolve();
+      g.render();
+    } else if (interruption === "settings-mute") {
+      g.click(g.nodes().find((n) => n.props?.["aria-label"] === "Settings"));
+      g.act(() => g.byType("GameSettings").props.onSoundChange(false));
+    } else if (interruption === "hidden") {
+      g.document.hidden = true;
+      g.document.visibilityState = "hidden";
+      g.act(() => g.document.emit("visibilitychange"));
+    } else g.unmount();
+    lateEnd?.();
+    assert.deepEqual(
+      g.audioEvents,
+      [],
+      "no delayed playback after its context ended",
+    );
+  });
+}
+
+test("blocked native shutdown drops queued applause even if end arrives much later", () => {
+  const g = mount({ soundEnabled: true, delayedAbort: true });
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  g.act(() => g.recognitions[0].result("7-5=2", true));
+  g.flushTimers(); // natural-end fallback requests abort
+  g.flushTimers(); // native release still absent: blocked
+  g.act(() => g.recognitions[0].end());
+  assert.deepEqual(g.audioEvents, []);
+});
+
+test("sound off to on enables success audio without reload, and off silences later successes", async () => {
+  const g = mount({ soundEnabled: false, delayedAbort: true });
+  const sound = (enabled) => {
+    g.click(g.nodes().find((n) => n.props?.["aria-label"] === "Settings"));
+    g.act(() => g.byType("GameSettings").props.onSoundChange(enabled));
+    g.act(() => g.byType("GameSettings").props.onClose());
+    assert.equal(g.byType("GameSettings").props.soundEnabled, enabled);
+  };
+  const next = async () => {
+    g.act(() => g.byType("GameControls").props.onNewPuzzle());
+    await Promise.resolve();
+    g.render();
+  };
+  g.click(g.segment(4, 3));
+  g.click(g.segment(4, 5));
+  assert.deepEqual(g.audioEvents, []);
+  await next();
+  sound(true);
+  g.click(g.segment(4, 3));
+  g.click(g.segment(4, 5));
+  assert.deepEqual(g.audioEvents, ["construct", "play"]);
+  sound(false);
+  assert.deepEqual(g.audioEvents, ["construct", "play", "pause"]);
+  await next();
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  g.act(() => g.recognitions[0].result("7-5=2", true));
+  g.act(() => g.recognitions[0].end());
+  assert.equal(g.audioEvents.filter((event) => event === "play").length, 1);
+  await next();
+  sound(true);
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  g.act(() => g.recognitions[1].result("7-5=2", true));
+  assert.equal(g.audioEvents.filter((event) => event === "play").length, 1);
+  g.act(() => g.recognitions[1].end());
+  assert.equal(g.audioEvents.filter((event) => event === "play").length, 2);
 });
