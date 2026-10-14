@@ -8,12 +8,15 @@ import {
   getMagnifierPlacement,
   magnifierZoom,
   type MagnifierPoint,
+  type MagnifierRect,
   type MagnifierViewport,
 } from "../../lib/magnifier";
 import { MatchstickArt } from "./MatchstickArt";
 
 export type TouchMagnifierProps = {
   surface: HTMLElement | null;
+  /** Rendered title/header, independent of the finger and the sampled board. */
+  anchor: HTMLElement | null;
   /** Raw finger coordinates; never replace these with a snapped target. */
   point: MagnifierPoint;
   rotatedClockwise: boolean;
@@ -114,35 +117,52 @@ function borderSize(element: HTMLElement) {
 /** Mount only during a phone touch drag. This component never changes input state. */
 export function TouchMagnifier({
   surface,
+  anchor,
   point,
   rotatedClockwise,
   stick,
 }: TouchMagnifierProps) {
   const scene = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<MagnifierViewport | null>(null);
+  const [anchorRect, setAnchorRect] = useState<MagnifierRect | null>(null);
   const [revision, setRevision] = useState(0);
   useLayoutEffect(() => {
+    // One title-area position for this hold, even if a voice caption expires or
+    // status copy reflows. The persistent anchor is independent of the finger.
+    setAnchorRect(anchor?.getBoundingClientRect() ?? null);
     const measure = () => {
       const view = window.visualViewport;
+      const css = window.getComputedStyle(document.documentElement);
+      const inset = (side: string) =>
+        parseFloat(css.getPropertyValue(`--magnifier-safe-${side}`)) || 0;
       setViewport({
         width: view?.width ?? window.innerWidth,
         height: view?.height ?? window.innerHeight,
         left: view?.offsetLeft ?? 0,
         top: view?.offsetTop ?? 0,
+        safeArea: {
+          top: inset("top"),
+          right: inset("right"),
+          bottom: inset("bottom"),
+          left: inset("left"),
+        },
       });
     };
     measure();
     window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
     window.visualViewport?.addEventListener("resize", measure);
     window.visualViewport?.addEventListener("scroll", measure);
     return () => {
       window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
       window.visualViewport?.removeEventListener("resize", measure);
       window.visualViewport?.removeEventListener("scroll", measure);
     };
-  }, []);
+  }, [anchor]);
 
-  const placement = viewport ? getMagnifierPlacement(point, viewport) : null;
+  const placement =
+    viewport && anchorRect ? getMagnifierPlacement(anchorRect, viewport) : null;
   const ready = Boolean(placement && surface);
   useLayoutEffect(() => {
     const container = scene.current;

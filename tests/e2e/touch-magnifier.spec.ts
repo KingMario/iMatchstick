@@ -35,6 +35,9 @@ function nodes(page: Page, mode: Mode) {
       : page.getByTestId("academy-board");
   return {
     board,
+    title: page.locator(
+      mode === "game" ? ".status-copy" : ".academy-lesson-heading h2",
+    ),
     source: board.locator(
       `[data-position="0"][data-segment="${mode === "game" ? 2 : 5}"]`,
     ),
@@ -47,43 +50,76 @@ function nodes(page: Page, mode: Mode) {
 for (const viewport of views)
   for (const hand of ["left", "right"])
     for (const mode of ["game", "academy"] as const) {
-      test(`phone touch uses the real board lens and drops at the finger ${mode} ${hand} ${viewport.width}`, async ({
+      test(`phone touch parks the real board lens at the title and drops at the finger ${mode} ${hand} ${viewport.width}`, async ({
         page,
         context,
       }) => {
         await page.setViewportSize(viewport);
         await open(page, mode, hand);
-        const { board, source, target } = nodes(page, mode);
+        const { board, title, source, target } = nodes(page, mode);
         const from = (await source.boundingBox())!;
+        const titleBounds = (await title.boundingBox())!;
+        const pressedFinger = {
+          x: from.x + from.width / 2,
+          y: from.y + from.height / 2,
+        };
         const cdp = await context.newCDPSession(page);
         try {
           await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
-            touchPoints: [
-              { x: from.x + from.width / 2, y: from.y + from.height / 2 },
-            ],
+            touchPoints: [pressedFinger],
           });
-          await expect(page.getByTestId("touch-magnifier")).toHaveCount(0);
+          const lens = page.getByTestId("touch-magnifier");
+          await expect(lens).toBeVisible();
+          await expect(source.locator(".matchstick-art")).toHaveCSS(
+            "visibility",
+            "hidden",
+          );
+          const pressedBounds = (await lens.boundingBox())!;
+          // Chromium's un-emulated viewport has zero safe-area insets. Anchor
+          // expectations use physical title bounds, including portrait rotation.
+          expect(pressedBounds.x).toBeCloseTo(
+            Math.max(
+              8,
+              Math.min(
+                titleBounds.x + titleBounds.width / 2 - 60,
+                viewport.width - 128,
+              ),
+            ),
+            1,
+          );
+          expect(pressedBounds.y).toBeCloseTo(
+            Math.max(
+              8,
+              Math.min(
+                titleBounds.y + titleBounds.height / 2 - 60,
+                viewport.height - 128,
+              ),
+            ),
+            1,
+          );
+          const scene = lens.locator(".touch-magnifier-scene > *");
+          await expect(scene).toHaveCount(1);
+          const pressedMatrix = await scene.evaluate((element) =>
+            new DOMMatrix(getComputedStyle(element).transform).toJSON(),
+          );
           const free = { x: viewport.width / 2, y: viewport.height - 50 };
           await cdp.send("Input.dispatchTouchEvent", {
             type: "touchMove",
             touchPoints: [free],
           });
-          const lens = page.getByTestId("touch-magnifier");
           await expect(lens).toBeVisible();
           await expect(page.locator(".drag-ghost")).toHaveCount(0);
           await expect(lens).toHaveAttribute("aria-hidden", "true");
           await expect(lens).toHaveAttribute("inert", "");
           await expect(lens).toHaveCSS("pointer-events", "none");
           const bounds = (await lens.boundingBox())!;
-          // Identical absolute finger positions must give identical placement in
-          // both hand settings. These expected coordinates contain no hand offset.
+          // The lens is parked near the visual title from the first press;
+          // moving the finger changes the magnified contents, not this position.
           expect(bounds.width).toBe(120);
           expect(bounds.height).toBe(120);
-          expect(bounds.x).toBeCloseTo(free.x - 60, 1);
-          expect(bounds.y).toBeCloseTo(free.y - 26 - 120, 1);
-          expect(bounds.y + bounds.height).toBeLessThan(free.y);
-          const scene = lens.locator(".touch-magnifier-scene > *");
+          expect(bounds.x).toBeCloseTo(pressedBounds.x, 1);
+          expect(bounds.y).toBeCloseTo(pressedBounds.y, 1);
           await expect(scene).toHaveCount(1);
           await expect
             .poll(async () => scene.locator("svg").count())
@@ -97,6 +133,14 @@ for (const viewport of views)
             new DOMMatrix(getComputedStyle(element).transform).toJSON(),
           );
           expect(matrix.a * matrix.d - matrix.b * matrix.c).toBeGreaterThan(0); // Never mirrored.
+          expect(matrix.e - pressedMatrix.e).toBeCloseTo(
+            -(free.x - pressedFinger.x) * 1.6,
+            1,
+          );
+          expect(matrix.f - pressedMatrix.f).toBeCloseTo(
+            -(free.y - pressedFinger.y) * 1.6,
+            1,
+          );
           for (const edge of [
             { x: 2, y: 2 },
             { x: viewport.width - 2, y: viewport.height - 2 },
@@ -106,6 +150,8 @@ for (const viewport of views)
               touchPoints: [edge],
             });
             const clamped = (await lens.boundingBox())!;
+            expect(clamped.x).toBeCloseTo(pressedBounds.x, 1);
+            expect(clamped.y).toBeCloseTo(pressedBounds.y, 1);
             expect(clamped.x).toBeGreaterThanOrEqual(8);
             expect(clamped.y).toBeGreaterThanOrEqual(8);
             expect(clamped.x + clamped.width).toBeLessThanOrEqual(
@@ -124,6 +170,17 @@ for (const viewport of views)
           await expect(lens.locator(".touch-magnifier-stick")).toHaveClass(
             /is-snapped/,
           );
+          await expect(lens.locator(".touch-magnifier-stick svg")).toHaveCSS(
+            "visibility",
+            "visible",
+          );
+          await expect(source.locator(".matchstick-art")).toHaveCSS(
+            "visibility",
+            "hidden",
+          );
+          const snappedBounds = (await lens.boundingBox())!;
+          expect(snappedBounds.x).toBeCloseTo(pressedBounds.x, 1);
+          expect(snappedBounds.y).toBeCloseTo(pressedBounds.y, 1);
           const vertical =
             mode === "academy"
               ? viewport.width > viewport.height
@@ -137,6 +194,9 @@ for (const viewport of views)
           });
           await expect(lens).toHaveCount(0);
           await expect(page.locator(".drag-ghost")).toHaveCount(0);
+          await expect(
+            board.locator(".matchstick-art[style*='hidden']"),
+          ).toHaveCount(0);
           if (mode === "game")
             await expect(board).toHaveAttribute("aria-label", "6+1=7");
           else await expect(page.getByTestId("academy-success")).toBeVisible();

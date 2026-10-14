@@ -20,6 +20,9 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
     elements = new Map();
   const timers = new Map(),
     intervals = new Map();
+  const recognitions = [];
+  let mountedRefs = new Set(),
+    renderedRefs = new Set();
   let cursor = 0,
     dirty = false,
     tree,
@@ -76,6 +79,24 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
     innerWidth: viewport.width,
     innerHeight: viewport.height,
     localStorage: {},
+    SpeechRecognition: class {
+      constructor() {
+        recognitions.push(this);
+      }
+      start() {}
+      abort() {
+        this.onend?.();
+      }
+      result(transcript, isFinal = false) {
+        this.onresult?.({
+          resultIndex: 0,
+          results: [Object.assign([{ transcript }], { isFinal })],
+        });
+      }
+      end() {
+        this.onend?.();
+      }
+    },
     location: {
       search: "?puzzle=7-5%3D3",
       href: "https://example.test/?puzzle=7-5%3D3",
@@ -150,15 +171,24 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
         screenOrientation: props["data-screen-orientation"],
       };
     }
-    if (props.ref)
-      props.ref.current = {
-        getBoundingClientRect: () => ({
-          left: 0,
-          top: 0,
-          width: 2200,
-          height: 600,
-        }),
-      };
+    if (props.ref) {
+      renderedRefs.add(props.ref);
+      const identity = `ref:${props.className ?? type}`;
+      if (!elements.has(identity)) {
+        elements.set(identity, {
+          getBoundingClientRect() {
+            if (this.props.className === "status-copy")
+              return portrait
+                ? { left: 342, top: 250, width: 40, height: 300 }
+                : { left: 250, top: 8, width: 300, height: 40 };
+            return { left: 0, top: 0, width: 2200, height: 600 };
+          },
+        });
+      }
+      node.element = elements.get(identity);
+      node.element.props = props;
+      props.ref.current = node.element;
+    }
     return node;
   }
   const memo = (factory, deps) => {
@@ -226,6 +256,8 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
         exports,
         document,
         window,
+        setTimeout: window.setTimeout,
+        clearTimeout: window.clearTimeout,
         URL,
         URLSearchParams,
         navigator: { userAgent: phone ? "iPhone" : "desktop" },
@@ -274,7 +306,8 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
             };
           if (resolved === "components/matchstick/usePwaUpdate")
             return { usePwaUpdate: () => ({ status: "idle" }) };
-          if (resolved === "lib/drag") return load(`${resolved}.ts`);
+          if (["lib/drag", "lib/speech", "lib/voiceSession"].includes(resolved))
+            return load(`${resolved}.ts`);
           if (resolved.startsWith("lib/"))
             return require(`../.test-out/${resolved}.js`);
           if (resolved === "components/matchstick/copy")
@@ -302,7 +335,13 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
       assert.ok(count++ < 20, "hooks settle");
       dirty = false;
       cursor = 0;
+      renderedRefs = new Set();
       tree = MatchstickGame();
+      // React clears detached refs during commit. Conditional voice/title
+      // content must not leave falsely usable elements in the model.
+      for (const ref of mountedRefs)
+        if (!renderedRefs.has(ref)) ref.current = null;
+      mountedRefs = renderedRefs;
       for (const effect of effects.splice(0)) effect();
     } while (dirty);
   }
@@ -354,6 +393,7 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
     window,
     document,
     timers,
+    recognitions,
     lens: () => nodes().find((n) => n.type === "TouchMagnifier"),
     ghost: () =>
       nodes().find((n) =>
@@ -452,6 +492,118 @@ function drag(game, from = [4, 3], to = [4, 5], pointerType = "touch") {
   );
   return { source: game.segment(...from), point, target };
 }
+
+for (const portrait of [false, true])
+  for (const hand of ["left", "right"]) {
+    test(`main phone lens receives the stable rendered game-title-area anchor: ${portrait}/${hand}`, () => {
+      const g = mount({ portrait, hand });
+      const title = g
+        .nodes()
+        .find((node) => node.props?.className === "status-copy");
+      assert.ok(
+        title?.element,
+        "the persistent visual title area owns a measurable DOM ref",
+      );
+      const expectedRect = portrait
+        ? { left: 342, top: 250, width: 40, height: 300 }
+        : { left: 250, top: 8, width: 300, height: 40 };
+      assert.deepEqual(title.element.getBoundingClientRect(), expectedRect);
+      for (const from of [
+        [4, 3],
+        [0, 1],
+      ]) {
+        const source = begin(g, from);
+        const pressed = g.center(source);
+        assert.equal(g.lens().props.anchor, title.element);
+        assert.notEqual(g.lens().props.anchor, source.element);
+        assert.notEqual(g.lens().props.anchor, g.lens().props.surface);
+        assert.deepEqual({ ...g.lens().props.point }, pressed);
+        for (const point of [
+          { x: 2, y: 2 },
+          { x: 2500, y: 1500 },
+        ]) {
+          g.pointer(g.segment(...from), "Move", point);
+          assert.equal(
+            g.lens().props.anchor,
+            title.element,
+            "finger motion cannot replace the common visual-title anchor",
+          );
+          assert.deepEqual({ ...g.lens().props.point }, point);
+          assert.equal(g.lens().props.stick.x, point.x);
+          assert.equal(g.lens().props.stick.y, point.y);
+          assert.equal(g.lens().props.stick.snapped, false);
+          assertSourceArtwork(g.segment(...from), true);
+        }
+        g.pointer(g.segment(...from), "Cancel", { x: 2500, y: 1500 });
+        assert.ok(!g.lens());
+        assertNoHiddenArtwork(g);
+      }
+    });
+  }
+
+for (const portrait of [false, true])
+  for (const hand of ["left", "right"]) {
+    test(`main touch retains the persistent title-area anchor across voice-caption expiry: ${portrait}/${hand}`, () => {
+      const g = mount({ portrait, hand });
+      const header = g
+        .nodes()
+        .find((node) => node.props?.className === "status-copy");
+      assert.ok(header?.element);
+      g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+      assert.equal(g.recognitions.length, 1);
+      assert.equal(g.byType("GameControls").props.listening, true);
+      g.act(() => g.recognitions[0].result("7 minus 5 equals 3", true));
+      g.act(() => g.recognitions[0].end());
+      assert.equal(g.byType("GameControls").props.listening, false);
+      assert.ok(
+        g.nodes().some((node) => node.props?.className === "voice-caption"),
+      );
+      assert.ok(
+        !g.nodes().some((node) => node.props?.className === "status-brand"),
+      );
+      assert.ok([...g.timers.values()].some((timer) => timer.ms === 4000));
+
+      const source = begin(g);
+      assert.equal(
+        g.lens().props.anchor,
+        header.element,
+        "the persistent title area is available while the title text is absent",
+      );
+      const firstPoint = { x: 2500, y: 1500 };
+      g.pointer(g.segment(4, 3), "Move", firstPoint);
+      assert.equal(g.lens().props.anchor, header.element);
+      assert.deepEqual({ ...g.lens().props.point }, firstPoint);
+      assertSourceArtwork(g.segment(4, 3), true);
+
+      // The presentation component separately tests the frozen rectangle; this
+      // real parent must keep the same anchor as caption/title content changes.
+      g.flushTimers();
+      assert.ok(
+        !g.nodes().some((node) => node.props?.className === "voice-caption"),
+      );
+      const title = g
+        .nodes()
+        .find((node) => node.props?.className === "status-brand");
+      assert.ok(title, "ordinary title text returns after caption expiry");
+      assert.ok(
+        g.lens(),
+        "caption timeout cannot end an ongoing touch preview",
+      );
+      assert.equal(g.lens().props.anchor, header.element);
+      assert.ok(source.element.captures.has(7));
+      assertSourceArtwork(g.segment(4, 3), true);
+      const nextPoint = { x: 2400, y: 1400 };
+      g.pointer(g.segment(4, 3), "Move", nextPoint);
+      assert.equal(g.lens().props.anchor, header.element);
+      assert.deepEqual({ ...g.lens().props.point }, nextPoint);
+      assert.equal(g.lens().props.stick.x, nextPoint.x);
+      assert.equal(g.lens().props.stick.y, nextPoint.y);
+      g.pointer(g.segment(4, 3), "Cancel", nextPoint);
+      assert.ok(!g.lens());
+      assert.equal(source.element.captures.size, 0);
+      assertNoHiddenArtwork(g);
+    });
+  }
 
 for (const portrait of [false, true])
   for (const hand of ["left", "right"]) {

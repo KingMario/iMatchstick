@@ -5,10 +5,10 @@ const read = (path) => readFileSync(path, "utf8");
 const game = read("components/MatchstickGame.tsx");
 const css = read("app/globals.css");
 test("settings gear follows counter outside status and puzzle controls", () => {
-  const header = game.slice(
-    game.indexOf('<div className="status-actions">'),
-    game.indexOf('<div className="status-copy">'),
-  );
+  const start = game.indexOf('<div className="status-actions"');
+  const end = game.indexOf('<div className="status-copy"', start);
+  assert.ok(start >= 0 && end > start);
+  const header = game.slice(start, end);
   assert.match(
     header,
     /<AnswerProgress[\s\S]*className="settings-button"[\s\S]*<ActionIcon name="settings"/,

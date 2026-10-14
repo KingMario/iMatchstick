@@ -859,6 +859,7 @@ export function AcademyLessonView({
       {drag?.touchMagnifier && (
         <TouchMagnifier
           surface={boardRef.current}
+          anchor={lessonHeadingRef.current}
           point={{ x: drag.pointerX, y: drag.pointerY }}
           rotatedClockwise={phonePortrait}
           stick={{

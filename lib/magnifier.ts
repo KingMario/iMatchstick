@@ -1,10 +1,22 @@
 /** All points here are physical viewport coordinates, never handedness-adjusted. */
 export type MagnifierPoint = { x: number; y: number };
+export type MagnifierRect = {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 export type MagnifierViewport = {
   width: number;
   height: number;
   left?: number;
   top?: number;
+  safeArea?: Partial<{
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  }>;
 };
 export const magnifierZoom = 1.6;
 export const magnifierDiameter = 120;
@@ -12,37 +24,37 @@ const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
 
 export function getMagnifierPlacement(
-  point: MagnifierPoint,
+  anchor: MagnifierRect,
   viewport: MagnifierViewport,
 ) {
-  const margin = Math.min(
-    8,
-    Math.max(0, (Math.min(viewport.width, viewport.height) - 1) / 2),
-  );
-  const gap = 26;
+  const safe = viewport.safeArea;
+  const safeLeft = clamp(safe?.left ?? 0, 0, viewport.width);
+  const safeRight = clamp(safe?.right ?? 0, 0, viewport.width - safeLeft);
+  const safeTop = clamp(safe?.top ?? 0, 0, viewport.height);
+  const safeBottom = clamp(safe?.bottom ?? 0, 0, viewport.height - safeTop);
+  const width = viewport.width - safeLeft - safeRight;
+  const height = viewport.height - safeTop - safeBottom;
+  const margin = Math.min(8, Math.max(0, (Math.min(width, height) - 1) / 2));
   const size = Math.max(
     0,
-    Math.min(
-      magnifierDiameter,
-      viewport.width - margin * 2,
-      viewport.height - margin * 2,
-    ),
+    Math.min(magnifierDiameter, width - margin * 2, height - margin * 2),
   );
-  const leftEdge = (viewport.left ?? 0) + margin;
-  const topEdge = (viewport.top ?? 0) + margin;
-  const bottomEdge = (viewport.top ?? 0) + viewport.height - margin;
-  const above = point.y - gap - size;
-  const below = point.y + gap;
-  const flip = above < topEdge && below + size <= bottomEdge;
+  const leftEdge = (viewport.left ?? 0) + safeLeft + margin;
+  const topEdge = (viewport.top ?? 0) + safeTop + margin;
+  // The title's rendered rectangle already includes the shell's rotation.
+  // Keep the lens there while only the sampled contents follow the finger.
   return {
     left: clamp(
-      point.x - size / 2,
+      anchor.left + anchor.width / 2 - size / 2,
       leftEdge,
-      leftEdge + viewport.width - margin * 2 - size,
+      leftEdge + width - margin * 2 - size,
     ),
-    top: clamp(flip ? below : above, topEdge, bottomEdge - size),
+    top: clamp(
+      anchor.top + anchor.height / 2 - size / 2,
+      topEdge,
+      topEdge + height - margin * 2 - size,
+    ),
     size,
-    below: flip,
   };
 }
 

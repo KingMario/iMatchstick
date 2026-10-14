@@ -1,4 +1,11 @@
-/* Physical-viewport portal: deliberately outside the rotated/handed game shell. */
+:root {
+  --magnifier-safe-top: env(safe-area-inset-top, 0px);
+  --magnifier-safe-right: env(safe-area-inset-right, 0px);
+  --magnifier-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --magnifier-safe-left: env(safe-area-inset-left, 0px);
+}
+
+/* Title-anchored physical portal: its sampled contents retain board rotation. */
 .touch-magnifier {
   position: fixed;
   z-index: 1000;

@@ -190,8 +190,25 @@ function mount(id, overrides = {}) {
       };
       if (props.ref) props.ref.current = node.element;
     }
-    if (props.ref && !node.element)
-      props.ref.current = { focus() {}, scrollTo() {} };
+    if (props.ref && !node.element) {
+      const identity = `ref:${props.className ?? type}`;
+      if (!elements.has(identity))
+        elements.set(identity, {
+          focus() {},
+          scrollTo() {},
+          getBoundingClientRect() {
+            // The lesson title shares the board's physical quarter-turn.
+            if (type === "h2")
+              return overrides.phonePortrait
+                ? { left: 330, top: 270, width: 40, height: 300 }
+                : { left: 270, top: 20, width: 300, height: 40 };
+            return { left: 0, top: 0, width: 2200, height: 600 };
+          },
+        });
+      node.element = elements.get(identity);
+      node.element.props = props;
+      props.ref.current = node.element;
+    }
     return node;
   }
   const react = {
@@ -985,6 +1002,52 @@ for (const lesson of academy.academyLessons.filter(
     }
   });
 }
+
+for (const phonePortrait of [false, true])
+  for (const dragHand of ["left", "right"])
+    for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"]) {
+      test(`Academy ${id} phone lens receives the stable rendered lesson-title anchor: ${phonePortrait}/${dragHand}`, () => {
+        const h = mount(id, { isPhone: true, phonePortrait, dragHand });
+        const title = h.nodes().find((node) => node.type === "h2");
+        assert.ok(
+          title?.element,
+          "the visible lesson title owns a measurable DOM ref",
+        );
+        assert.deepEqual(
+          title.element.getBoundingClientRect(),
+          phonePortrait
+            ? { left: 330, top: 270, width: 40, height: 300 }
+            : { left: 270, top: 20, width: 300, height: 40 },
+        );
+        const source = currentSource(h);
+        const [x, y] = center(source);
+        h.pointer(source, "Down", x, y);
+        assert.equal(h.lens().props.anchor, title.element);
+        assert.notEqual(h.lens().props.anchor, source.element);
+        assert.notEqual(h.lens().props.anchor, h.lens().props.surface);
+        assert.deepEqual({ ...h.lens().props.point }, { x, y });
+        for (const point of [
+          { x: 2, y: 2 },
+          { x: 2500, y: 1500 },
+        ]) {
+          h.pointer(currentSource(h), "Move", point.x, point.y);
+          assert.equal(
+            h.lens().props.anchor,
+            title.element,
+            "source or destination motion cannot replace the lesson-title anchor",
+          );
+          assert.deepEqual({ ...h.lens().props.point }, point);
+          assert.equal(h.lens().props.stick.x, point.x);
+          assert.equal(h.lens().props.stick.y, point.y);
+          assert.equal(h.lens().props.stick.snapped, false);
+          assertPressedArtwork(h, source);
+        }
+        h.pointer(currentSource(h), "Cancel", 2500, 1500);
+        assert.ok(!h.lens());
+        assertNoHiddenArtwork(h);
+        assert.deepEqual(h.completed, []);
+      });
+    }
 
 for (const phonePortrait of [false, true]) {
   for (const dragHand of ["left", "right"]) {

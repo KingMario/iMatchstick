@@ -184,6 +184,7 @@ export function MatchstickGame() {
   const applauseAudio = useRef<HTMLAudioElement | null>(null);
   const voiceSession = useRef<VoiceSession | null>(null);
   const equationRef = useRef<HTMLDivElement>(null);
+  const gameHeaderRef = useRef<HTMLDivElement>(null);
 
   const text = copy[language];
   const timedOut = timerEnabled && timeLeft <= 0;
@@ -1151,7 +1152,7 @@ export function MatchstickGame() {
                       <ActionIcon name="settings" />
                     </button>
                   </div>
-                  <div className="status-copy">
+                  <div className="status-copy" ref={gameHeaderRef}>
                     {voiceCaption ? (
                       <div
                         className="voice-caption"
@@ -1295,6 +1296,7 @@ export function MatchstickGame() {
                 {touchPreview ? (
                   <TouchMagnifier
                     surface={equationRef.current}
+                    anchor={gameHeaderRef.current}
                     point={{
                       x: touchPreview.pointerX,
                       y: touchPreview.pointerY,

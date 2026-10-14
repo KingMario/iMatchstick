@@ -138,6 +138,7 @@ test("magnifier has no server-rendered interactive copy or document dependency",
     renderToStaticMarkup(
       <TouchMagnifier
         surface={null}
+        anchor={null}
         point={{ x: 0, y: 0 }}
         rotatedClockwise
         stick={{ x: 0, y: 0, orientation: "horizontal" }}
