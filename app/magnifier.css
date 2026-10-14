@@ -1,0 +1,44 @@
+/* Physical-viewport portal: deliberately outside the rotated/handed game shell. */
+.touch-magnifier {
+  position: fixed;
+  z-index: 1000;
+  border-radius: 50%;
+  overflow: hidden;
+  isolation: isolate;
+  background: #fffaf0;
+  outline: 3px solid #4e4030;
+  box-shadow:
+    0 5px 18px #30292345,
+    0 0 0 5px #fffaf0d9;
+  pointer-events: none !important;
+  user-select: none;
+  contain: layout paint;
+}
+.touch-magnifier *,
+.touch-magnifier-scene {
+  pointer-events: none !important;
+}
+.touch-magnifier-scene {
+  position: absolute;
+  inset: 0;
+}
+.touch-magnifier-stick {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+.touch-magnifier-stick.is-snapped {
+  filter: drop-shadow(0 0 3px #239959);
+}
+.touch-magnifier-crosshair {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid #30292380;
+  background: #fffaf070;
+  z-index: 2;
+}

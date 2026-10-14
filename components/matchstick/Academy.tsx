@@ -6,6 +6,8 @@ import {
   academyChapters,
   academyLessons,
   getAcademySolution,
+  isAcademyMoveAllowed,
+  canSelectAcademySource,
   validateAcademyMove,
   validateAcademyRecognition,
   type AcademyLesson,
@@ -13,20 +15,21 @@ import {
 } from "../../lib/academy";
 import {
   dragStartThreshold,
-  findSnapTarget,
-  getDragHelperMetrics,
-  getDragHelperPoint,
+  resolveDragTarget,
+  getPointerDragMetrics,
   type DragHand,
 } from "../../lib/drag";
 import { type SelectedSegment } from "../../lib/matchstick";
 import { MatchstickChar } from "./MatchstickChar";
 import { MatchstickArt } from "./MatchstickArt";
+import { TouchMagnifier } from "./TouchMagnifier";
 import { SuccessConfetti } from "./SuccessConfetti";
 import { academyCopy } from "./academyCopy";
 
 type Props = {
   language: "zh" | "en";
   phonePortrait: boolean;
+  isPhone?: boolean;
   dragHand: DragHand;
   completedLessonIds: string[];
   onComplete: (id: string) => void;
@@ -35,6 +38,10 @@ type Props = {
 type Selection = SelectedSegment | "reservoir" | null;
 type Drag = {
   from: SelectedSegment | null;
+  touchMagnifier: boolean;
+  pointerX: number;
+  pointerY: number;
+  snapped: boolean;
   startX: number;
   startY: number;
   x: number;
@@ -60,13 +67,20 @@ export function shouldSuppressAcademyClick(
 
 export function Academy(props: Props) {
   const [index, setIndex] = useState<number | null>(null);
+  const [chapterId, setChapterId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLElement>(null);
+  const overviewHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (index === null) overviewHeading.current?.focus();
+  }, [index, chapterId]);
   const text = academyCopy[props.language];
   const completed = new Set(props.completedLessonIds);
   const count = academyLessons.filter((lesson) =>
     completed.has(lesson.id),
   ).length;
+  const chapter = academyChapters.find((item) => item.id === chapterId);
   function navigate(next: number | null) {
+    if (next !== null) setChapterId(academyLessons[next].chapterId);
     setIndex(next);
     scrollRef.current?.scrollTo({ top: 0 });
   }
@@ -75,27 +89,27 @@ export function Academy(props: Props) {
       className="academy"
       data-testid="academy"
       ref={scrollRef}
-      aria-labelledby="academy-title"
+      aria-label={text.title}
     >
-      <header className="academy-header">
-        <div>
-          <p className="academy-eyebrow">{text.eyebrow}</p>
-          <h1 id="academy-title">{text.title}</h1>
-        </div>
-        <button
-          className="academy-button quiet"
-          data-testid="academy-exit"
-          onClick={props.onExit}
-        >
-          {text.exit} ↗
-        </button>
-      </header>
       {index === null ? (
         <>
-          <p className="academy-intro">{text.intro}</p>
+          <header className="academy-header">
+            <h1 ref={overviewHeading} tabIndex={-1}>
+              {text.title}
+            </h1>
+            <button
+              className="academy-button quiet"
+              data-testid="academy-exit"
+              onClick={props.onExit}
+            >
+              {text.exit} ↗
+            </button>
+          </header>
           <div className="academy-progress">
             <div className="academy-progress-line">
-              <span>{text.chapters}</span>
+              <span>
+                {chapter ? chapter.title[props.language] : text.chapters}
+              </span>
               <strong>
                 {count} / {academyLessons.length} {text.progress}
               </strong>
@@ -113,68 +127,63 @@ export function Academy(props: Props) {
               />
             </div>
           </div>
-          {count === academyLessons.length && (
-            <div className="academy-success">
-              <div>
-                <strong>{text.allDone}</strong>
-                <p>{text.allDoneNote}</p>
+          {chapter ? (
+            <>
+              <div className="academy-chapter-intro">
+                <button
+                  className="academy-button quiet"
+                  data-testid="academy-chapters-back"
+                  onClick={() => setChapterId(null)}
+                >
+                  ← {text.allChapters}
+                </button>
+                <p>{chapter.description[props.language]}</p>
               </div>
-            </div>
-          )}
-          <div className="academy-chapters">
-            {academyChapters.map((chapter) => (
-              <article className="academy-chapter" key={chapter.id}>
-                <div className="academy-chapter-head">
-                  <span>
+              <AcademyChapterLessons
+                chapterId={chapter.id}
+                language={props.language}
+                completedLessonIds={props.completedLessonIds}
+                onSelect={navigate}
+              />
+            </>
+          ) : (
+            <>
+              <p className="academy-intro">
+                {count === academyLessons.length
+                  ? `${text.allDone} ${text.allDoneNote}`
+                  : text.intro}
+              </p>
+              <div className="academy-chapters">
+                {academyChapters.map((item) => (
+                  <button
+                    key={item.id}
+                    className="academy-chapter"
+                    data-testid="academy-chapter"
+                    data-chapter-id={item.id}
+                    onClick={() => setChapterId(item.id)}
+                  >
                     <b className="academy-chapter-number">
-                      {chapter.id.toString().padStart(2, "0")}
+                      {item.id.toString().padStart(2, "0")}
                     </b>
-                    {
-                      academyLessons.filter(
-                        (l) =>
-                          l.chapterId === chapter.id && completed.has(l.id),
-                      ).length
-                    }{" "}
-                    / 4
-                  </span>
-                  <h3>{chapter.title[props.language]}</h3>
-                  <p className="academy-chapter-description">
-                    {chapter.description[props.language]}
-                  </p>
-                </div>
-                <div className="academy-lesson-list">
-                  {academyLessons
-                    .filter((l) => l.chapterId === chapter.id)
-                    .map((lesson, i) => (
-                      <button
-                        key={lesson.id}
-                        className={`academy-lesson-link ${completed.has(lesson.id) ? "done" : ""}`}
-                        data-lesson-id={lesson.id}
-                        onClick={() => navigate(academyLessons.indexOf(lesson))}
-                      >
-                        <span
-                          className="academy-lesson-number"
-                          aria-label={
-                            completed.has(lesson.id)
-                              ? text.completed
-                              : undefined
-                          }
-                        >
-                          {completed.has(lesson.id) ? "✓" : i + 1}
-                        </span>
-                        <span>
-                          {lesson.mode === "recognition"
-                            ? `${text.lesson} ${i + 1} ${text.lessonUnit}`
-                            : `${lesson.initial.join(lesson.mode === "equation" ? "" : " · ")} → ${lesson.target.join(lesson.mode === "equation" ? "" : " · ")}`}
-                        </span>
-                        <span aria-hidden="true">↗</span>
-                      </button>
-                    ))}
-                </div>
-              </article>
-            ))}
-          </div>
-          <p className="academy-free-note">{text.free}</p>
+                    <span className="academy-chapter-title">
+                      {item.title[props.language]}
+                    </span>
+                    <span className="academy-chapter-count">
+                      {
+                        academyLessons.filter(
+                          (lesson) =>
+                            lesson.chapterId === item.id &&
+                            completed.has(lesson.id),
+                        ).length
+                      }{" "}
+                      / 4 <span aria-hidden="true">↗</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {chapter && <p className="academy-free-note">{text.free}</p>}
         </>
       ) : (
         <AcademyLessonView
@@ -192,15 +201,61 @@ export function Academy(props: Props) {
   );
 }
 
+export function AcademyChapterLessons({
+  chapterId,
+  language,
+  completedLessonIds,
+  onSelect,
+}: {
+  chapterId: number;
+  language: Props["language"];
+  completedLessonIds: string[];
+  onSelect: (index: number) => void;
+}) {
+  const text = academyCopy[language];
+  return (
+    <div className="academy-lesson-list" data-testid="academy-chapter-lessons">
+      {academyLessons
+        .filter((lesson) => lesson.chapterId === chapterId)
+        .map((lesson, i) => {
+          const done = completedLessonIds.includes(lesson.id);
+          return (
+            <button
+              key={lesson.id}
+              className={`academy-lesson-link ${done ? "done" : ""}`}
+              data-lesson-id={lesson.id}
+              onClick={() => onSelect(academyLessons.indexOf(lesson))}
+            >
+              <span
+                className="academy-lesson-number"
+                aria-label={done ? text.completed : undefined}
+              >
+                {done ? "✓" : i + 1}
+              </span>
+              <span>
+                {lesson.mode === "recognition"
+                  ? `${text.lesson} ${i + 1} ${text.lessonUnit}`
+                  : `${lesson.initial.join(lesson.mode === "equation" ? "" : " · ")} → ${lesson.target.join(lesson.mode === "equation" ? "" : " · ")}`}
+              </span>
+              <span aria-hidden="true">↗</span>
+            </button>
+          );
+        })}
+    </div>
+  );
+}
+
 export function AcademyLessonView({
   lesson,
   index,
   language,
   phonePortrait,
+  isPhone = false,
   dragHand,
   onComplete,
   onOverview,
   onNext,
+  onExit,
 }: Props & {
   lesson: AcademyLesson;
   index: number;
@@ -221,17 +276,42 @@ export function AcademyLessonView({
     | null
   >(null);
   const [guidance, setGuidance] = useState<number>(lesson.hintLevel);
-  const [showHint, setShowHint] = useState(lesson.hintLevel === 1);
+  const [showHint, setShowHint] = useState(false);
   const [demonstrate, setDemonstrate] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const suppressClick = useRef(false);
+  const boardRef = useRef<HTMLDivElement>(null);
   const reservoirRef = useRef<HTMLButtonElement>(null);
+  const lessonHeadingRef = useRef<HTMLHeadingElement>(null);
+  const helpHeadingRef = useRef<HTMLHeadingElement>(null);
+  const helpButtonRef = useRef<HTMLButtonElement>(null);
+  const helpMounted = useRef(false);
+  useEffect(() => {
+    lessonHeadingRef.current?.focus();
+  }, []);
+  useEffect(() => {
+    if (!helpMounted.current) {
+      helpMounted.current = true;
+      return;
+    }
+    if (showHint) helpHeadingRef.current?.focus();
+    else helpButtonRef.current?.focus();
+  }, [showHint]);
   const solution = getAcademySolution(lesson);
   const interactive = !solved && lesson.mode !== "recognition";
   const segmentSelection =
     selected && selected !== "reservoir" ? selected : null;
   const chapter = academyChapters.find((c) => c.id === lesson.chapterId)!;
+  const selectionActive = selected !== null || drag !== null;
+  const activeSource = drag ? drag.from : segmentSelection;
+  const canDrop = (position: number, segment: number) =>
+    interactive &&
+    selectionActive &&
+    isAcademyMoveAllowed(lesson, {
+      from: activeSource,
+      to: { position, segment },
+    });
 
   function release(current: Drag | null) {
     if (current?.element.hasPointerCapture(current.pointerId))
@@ -264,6 +344,7 @@ export function AcademyLessonView({
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       interrupt();
+      setShowHint(false);
       setSelected(null);
       setFeedback("deselected");
     };
@@ -290,6 +371,7 @@ export function AcademyLessonView({
     setChoice(null);
     setFeedback(null);
     setDemonstrate(false);
+    setShowHint(false);
   }
   function apply(movement: AcademyMovement) {
     clearDrag();
@@ -320,6 +402,7 @@ export function AcademyLessonView({
     if (!interactive) return;
     const target = { position, segment };
     if (visible) {
+      if (!canSelectAcademySource(lesson, target)) return;
       select(same(segmentSelection, target) ? null : target);
       return;
     }
@@ -344,6 +427,7 @@ export function AcademyLessonView({
     if (
       dragRef.current ||
       !interactive ||
+      (from ? !canSelectAcademySource(lesson, from) : lesson.mode !== "add") ||
       (event.pointerType === "mouse" && event.button !== 0)
     )
       return;
@@ -352,14 +436,16 @@ export function AcademyLessonView({
       from === null
         ? event.currentTarget.querySelector(".matchstick-art")
         : null;
-    const metrics = getDragHelperMetrics(
+    const metrics = getPointerDragMetrics(
       (artwork ?? event.currentTarget).getBoundingClientRect(),
       orientation,
-      phonePortrait,
-      dragHand,
+      { phonePortrait, dragHand, pointerType: event.pointerType, isPhone },
     );
-    dragRef.current = {
+    const pending: Drag = {
       from,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      snapped: false,
       startX: event.clientX,
       startY: event.clientY,
       x: event.clientX,
@@ -370,19 +456,28 @@ export function AcademyLessonView({
       element: event.currentTarget,
       pointerId: event.pointerId,
     };
+    dragRef.current = pending;
+    // Enable destinations before the first move event, without selecting on
+    // pointer-down: a normal tap must still toggle selection only on click.
+    setDrag(pending);
   }
   function findTarget(
     event: Pick<PointerEvent<HTMLButtonElement>, "clientX" | "clientY">,
     current: Drag,
   ) {
-    const point = getDragHelperPoint(event, current.offsetX, current.offsetY);
-    // A direct hit takes priority, while offset snapping keeps the target visible under a finger.
-    const direct = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>(".match-segment.placeholder:not(:disabled)");
-    const snapped = findSnapTarget(point);
-    return { target: direct ?? snapped?.element ?? null, point };
+    return resolveDragTarget(event, current, {
+      preferPointerHit: true,
+      isAllowed: (element) =>
+        isAcademyMoveAllowed(lesson, {
+          from: current.from,
+          to: {
+            position: Number(element.dataset.position),
+            segment: Number(element.dataset.segment),
+          },
+        }),
+    });
   }
+
   function pointerMove(event: PointerEvent<HTMLButtonElement>) {
     const current = dragRef.current;
     if (!current || current.pointerId !== event.pointerId) return;
@@ -398,17 +493,19 @@ export function AcademyLessonView({
     suppressClick.current = true;
     if (!current.active) select(current.from ?? "reservoir");
     const { target, point } = findTarget(event, current);
-    const rect = target?.getBoundingClientRect();
+    const targetOrientation = target?.orientation;
     const next: Drag = {
       ...current,
       active: true,
-      x: rect ? rect.left + rect.width / 2 : point.x,
-      y: rect ? rect.top + rect.height / 2 : point.y,
-      orientation: rect
-        ? rect.width > rect.height
-          ? "horizontal"
-          : "vertical"
-        : current.orientation,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      snapped: Boolean(target),
+      x: target?.x ?? point.x,
+      y: target?.y ?? point.y,
+      orientation:
+        targetOrientation === "horizontal" || targetOrientation === "vertical"
+          ? targetOrientation
+          : current.orientation,
     };
     dragRef.current = next;
     setDrag(next);
@@ -438,8 +535,8 @@ export function AcademyLessonView({
       apply({
         from: current.from,
         to: {
-          position: Number(target.dataset.position),
-          segment: Number(target.dataset.segment),
+          position: Number(target.element.dataset.position),
+          segment: Number(target.element.dataset.segment),
         },
       });
     else {
@@ -499,205 +596,241 @@ export function AcademyLessonView({
         >
           ← {text.back}
         </button>
-        <span className="academy-eyebrow">
-          {chapter.title[language]} · {(index % 4) + 1} / 4
-        </span>
-      </div>
-      <div className="academy-lesson-heading">
-        <div>
-          <h2>{lesson.prompt[language]}</h2>
-          <p>
-            {text.lesson} {index + 1} {text.lessonUnit} /{" "}
-            {academyLessons.length}
+        <div className="academy-lesson-heading">
+          <p className="academy-eyebrow">
+            {chapter.title[language]} · {(index % 4) + 1} / 4
           </p>
+          <h2 ref={lessonHeadingRef} tabIndex={-1}>
+            {lesson.prompt[language]}
+          </h2>
         </div>
-        <div
-          className="academy-guidance"
-          role="group"
+        <button
+          className="academy-button quiet"
+          data-testid="academy-exit"
+          onClick={onExit}
+        >
+          {text.exit} ↗
+        </button>
+      </div>
+      {showHint ? (
+        <aside
+          className="academy-assistance"
+          data-testid="academy-assistance"
           aria-label={text.hintStep}
         >
-          {[2, 1, 0].map((level) => (
+          <div className="academy-assistance-heading">
+            <h3 ref={helpHeadingRef} tabIndex={-1}>
+              {text.hintStep}
+            </h3>
             <button
-              key={level}
-              aria-pressed={guidance === level}
-              onClick={() => {
-                setGuidance(level);
-                setShowHint(level === 1);
-                setDemonstrate(false);
-              }}
+              className="academy-button quiet"
+              data-testid="academy-hint-close"
+              onClick={() => setShowHint(false)}
             >
-              {text.hints[2 - level]}
+              ← {text.backToPractice}
             </button>
-          ))}
-        </div>
-      </div>
-      <div className="academy-practice">
-        <div
-          className="academy-board"
-          data-testid="academy-board"
-          role="group"
-          aria-label={text.board}
-        >
-          {cards.map((char, position) => (
+          </div>
+          <p className="academy-hint-card">{lesson.hint[language]}</p>
+          <div className="academy-assistance-actions">
             <div
-              className={`academy-char-wrap ${cards.length > 1 && lesson.mode !== "equation" ? "academy-separate-card" : ""}`}
-              key={position}
+              className="academy-guidance"
+              role="group"
+              aria-label={text.hintStep}
             >
-              <MatchstickChar
-                char={char}
-                position={position}
-                rotatedClockwise={phonePortrait}
-                directions={Array(7).fill(false)}
-                selected={segmentSelection}
-                selectionActive={selected !== null}
-                interactionLocked={!interactive}
-                canSelectSegment={() => true}
-                canDropSegment={() => true}
-                showTargetOutline={(p, s) =>
-                  !solved &&
-                  (guidance === 2 || demonstrate) &&
-                  same(solution?.to ?? null, { position: p, segment: s })
-                }
-                hintSource={
-                  !solved &&
-                  (demonstrate || (guidance === 2 && lesson.mode === "remove"))
-                    ? solution?.from
-                    : null
-                }
-                hintTarget={!solved && demonstrate ? solution?.to : null}
-                onSegmentClick={onSegmentClick}
-                onSegmentPointerDown={(event, p, s, visible, orientation) => {
-                  if (visible)
-                    pointerDown(
-                      event,
-                      { position: p, segment: s },
-                      orientation,
-                    );
-                }}
-                onSegmentPointerMove={pointerMove}
-                onSegmentPointerUp={pointerUp}
-                onSegmentPointerCancel={cancel}
-                labels={{
-                  equalsLabel: text.equals,
-                  segmentLabel: `${text.character} ${position + 1}, ${text.segment}`,
-                }}
-              />
-              {cards.length > 1 && lesson.mode !== "equation" && (
-                <span className="academy-char-position">{position + 1}</span>
-              )}
+              {[2, 1, 0].map((level) => (
+                <button
+                  key={level}
+                  aria-pressed={guidance === level}
+                  onClick={() => {
+                    setGuidance(level);
+                    setShowHint(false);
+                    setDemonstrate(false);
+                  }}
+                >
+                  {text.hints[2 - level]}
+                </button>
+              ))}
             </div>
-          ))}
-        </div>
-        {(lesson.mode === "add" || lesson.mode === "remove") && (
-          <button
-            ref={reservoirRef}
-            className={`academy-reservoir ${selected === "reservoir" ? "selected" : ""} ${demonstrate && !solved ? (lesson.mode === "add" ? "demonstrated-source" : "demonstrated") : ""}`}
-            data-testid="academy-reservoir"
-            disabled={solved}
-            aria-pressed={selected === "reservoir"}
-            onClick={reservoirClick}
-            onPointerDown={(event) => {
-              if (lesson.mode === "add")
-                pointerDown(
-                  event,
-                  null,
-                  phonePortrait ? "vertical" : "horizontal",
-                );
-            }}
-            onPointerMove={pointerMove}
-            onPointerUp={pointerUp}
-            onPointerCancel={cancel}
-          >
-            {(lesson.mode === "add" && !solved) ||
-            (lesson.mode === "remove" && solved) ? (
-              <MatchstickArt orientation="horizontal" />
-            ) : (
-              <span aria-hidden="true">↙</span>
-            )}
-            <span>
-              {lesson.mode === "add" ? text.reservoirAdd : text.reservoirRemove}
-            </span>
-          </button>
-        )}
-        {lesson.mode === "recognition" && (
-          <div className="academy-choices">
-            {lesson.choices?.map((value) => (
+            {lesson.mode !== "recognition" && (
               <button
-                className="academy-choice"
-                key={value}
-                data-choice={value}
-                aria-pressed={choice === value && solved}
-                disabled={solved}
-                onClick={() => choose(value)}
+                className="academy-button"
+                data-testid="academy-demonstrate"
+                onClick={() => {
+                  setDemonstrate(!demonstrate);
+                  setShowHint(false);
+                }}
               >
-                {value}
+                {demonstrate ? text.hideMove : text.showMove}
               </button>
+            )}
+          </div>
+        </aside>
+      ) : (
+        <div
+          ref={boardRef}
+          className={`academy-practice ${lesson.mode === "recognition" || lesson.mode === "add" || lesson.mode === "remove" ? "with-tools" : ""}`}
+        >
+          <div
+            className="academy-board"
+            data-testid="academy-board"
+            role="group"
+            aria-label={text.board}
+          >
+            {cards.map((char, position) => (
+              <div
+                className={`academy-char-wrap ${cards.length > 1 && lesson.mode !== "equation" ? "academy-separate-card" : ""}`}
+                key={position}
+              >
+                <MatchstickChar
+                  char={char}
+                  position={position}
+                  rotatedClockwise={phonePortrait}
+                  directions={Array(7).fill(false)}
+                  selected={segmentSelection}
+                  selectionActive={selectionActive}
+                  interactionLocked={!interactive}
+                  canSelectSegment={(p, s) =>
+                    canSelectAcademySource(lesson, { position: p, segment: s })
+                  }
+                  canDropSegment={canDrop}
+                  showTargetOutline={(p, s) =>
+                    !solved &&
+                    (guidance === 2 || demonstrate) &&
+                    same(solution?.to ?? null, { position: p, segment: s }) &&
+                    (!selectionActive || canDrop(p, s))
+                  }
+                  hintSource={
+                    !solved &&
+                    (demonstrate ||
+                      (guidance === 2 && lesson.mode === "remove"))
+                      ? solution?.from
+                      : null
+                  }
+                  hintTarget={!solved && demonstrate ? solution?.to : null}
+                  onSegmentClick={onSegmentClick}
+                  onSegmentPointerDown={(event, p, s, visible, orientation) => {
+                    if (visible)
+                      pointerDown(
+                        event,
+                        { position: p, segment: s },
+                        orientation,
+                      );
+                  }}
+                  onSegmentPointerMove={pointerMove}
+                  onSegmentPointerUp={pointerUp}
+                  onSegmentPointerCancel={cancel}
+                  labels={{
+                    equalsLabel: text.equals,
+                    segmentLabel: `${text.character} ${position + 1}, ${text.segment}`,
+                  }}
+                />
+                {cards.length > 1 && lesson.mode !== "equation" && (
+                  <span className="academy-char-position">{position + 1}</span>
+                )}
+              </div>
             ))}
           </div>
-        )}
-        <p
-          className={`academy-status ${feedback && feedback in text.feedback ? "error" : ""}`}
-          role="status"
-          aria-live="polite"
-        >
-          {solved ? text.success : status}
-        </p>
-      </div>
-      {(showHint || demonstrate) && !solved && (
-        <aside className="academy-hint-card">
-          <p>{lesson.hint[language]}</p>
-          {demonstrate && <p>{text.demonstrate}</p>}
-        </aside>
-      )}
-      {solved && (
-        <div className="academy-success" data-testid="academy-success">
-          <SuccessConfetti />
-          <div>
-            <strong>✓ {text.success}</strong>
-            <p>{text.successNote}</p>
+          {(lesson.mode === "add" || lesson.mode === "remove") && (
+            <button
+              ref={reservoirRef}
+              className={`academy-reservoir ${selected === "reservoir" ? "selected" : ""} ${demonstrate && !solved ? (lesson.mode === "add" ? "demonstrated-source" : "demonstrated") : ""}`}
+              data-testid="academy-reservoir"
+              disabled={
+                !interactive ||
+                (lesson.mode === "remove" &&
+                  (!activeSource ||
+                    !isAcademyMoveAllowed(lesson, {
+                      from: activeSource,
+                      to: null,
+                    })))
+              }
+              aria-pressed={selected === "reservoir"}
+              onClick={reservoirClick}
+              onPointerDown={(event) => {
+                if (lesson.mode === "add")
+                  pointerDown(
+                    event,
+                    null,
+                    phonePortrait ? "vertical" : "horizontal",
+                  );
+              }}
+              onPointerMove={pointerMove}
+              onPointerUp={pointerUp}
+              onPointerCancel={cancel}
+            >
+              {(lesson.mode === "add" && !solved) ||
+              (lesson.mode === "remove" && solved) ? (
+                <MatchstickArt orientation="horizontal" />
+              ) : (
+                <span aria-hidden="true">↙</span>
+              )}
+              <span>
+                {lesson.mode === "add"
+                  ? text.reservoirAdd
+                  : text.reservoirRemove}
+              </span>
+            </button>
+          )}
+          {lesson.mode === "recognition" && (
+            <div className="academy-choices">
+              {lesson.choices?.map((value) => (
+                <button
+                  className="academy-choice"
+                  key={value}
+                  data-choice={value}
+                  aria-pressed={choice === value && solved}
+                  disabled={solved}
+                  onClick={() => choose(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          )}
+          <div
+            className={`academy-status ${solved ? "academy-success" : ""} ${feedback && feedback in text.feedback ? "error" : ""}`}
+            data-testid={solved ? "academy-success" : "academy-status"}
+            role="status"
+            aria-live="polite"
+          >
+            {solved && <SuccessConfetti />}
+            {solved
+              ? `✓ ${text.success} ${text.successNote}`
+              : feedback
+                ? status
+                : demonstrate
+                  ? text.demonstrate
+                  : guidance === 1
+                    ? lesson.hint[language]
+                    : status}
           </div>
-          <button className="academy-button" onClick={reset}>
-            {text.replay}
-          </button>
         </div>
       )}
       <div className="academy-footer">
         <div className="academy-controls">
           <button
             className="academy-button"
-            data-testid="academy-undo"
-            disabled={!solved && !selected && !feedback && choice === null}
-            onClick={reset}
-          >
-            ↶ {text.undo}
-          </button>
-          <button
-            className="academy-button"
             data-testid="academy-reset"
             onClick={reset}
           >
-            {text.reset}
+            ↶ {solved ? text.replay : text.restart}
           </button>
           <button
             className="academy-button"
             data-testid="academy-hint"
+            ref={helpButtonRef}
+            aria-expanded={showHint}
             disabled={solved}
-            onClick={() => setShowHint(!showHint)}
+            onClick={() => {
+              clearDrag();
+              suppressClick.current = false;
+              setSelected(null);
+              setFeedback(null);
+              setShowHint(!showHint);
+            }}
           >
             {showHint ? text.hideHint : text.hint}
           </button>
-          {lesson.mode !== "recognition" && (
-            <button
-              className="academy-button"
-              disabled={solved}
-              onClick={() => {
-                setDemonstrate(!demonstrate);
-                setShowHint(true);
-              }}
-            >
-              {text.showMove}
-            </button>
-          )}
         </div>
         <button
           className="academy-button primary"
@@ -707,7 +840,22 @@ export function AcademyLessonView({
           {solved ? text.next : text.skip} →
         </button>
       </div>
+      {drag?.active && drag.touchMagnifier && (
+        <TouchMagnifier
+          surface={boardRef.current}
+          point={{ x: drag.pointerX, y: drag.pointerY }}
+          rotatedClockwise={phonePortrait}
+          stick={{
+            x: drag.x,
+            y: drag.y,
+            orientation: drag.orientation,
+            snapped: drag.snapped,
+            reversed: phonePortrait && drag.orientation === "vertical",
+          }}
+        />
+      )}
       {drag?.active &&
+        !drag.touchMagnifier &&
         createPortal(
           <div
             className={`drag-ghost academy-ghost ${drag.orientation}`}

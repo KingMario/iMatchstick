@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   academyChapters,
+  isAcademyMoveAllowed,
+  canSelectAcademySource,
   academyLessons,
   getAcademyEmptySegments,
   getAcademyVisibleSegments,
@@ -326,5 +328,91 @@ describe("authored academy curriculum", () => {
       "not-allowed",
     );
     assert.equal(validateAcademyRecognition(cross, "7").reason, "not-allowed");
+  });
+});
+
+describe("academy legal drop zones", () => {
+  it("shares exhaustive validator legality without revealing only the correct answer", () => {
+    let legalWrongGoals = 0;
+    for (const lesson of academyLessons) {
+      for (const move of candidates(lesson.initial)) {
+        const reason = validateAcademyMove(lesson, move).reason;
+        assert.equal(
+          isAcademyMoveAllowed(lesson, move),
+          reason === "success" || reason === "wrong-target",
+          `${lesson.id}: ${JSON.stringify(move)}`,
+        );
+        if (reason === "wrong-target") legalWrongGoals++;
+      }
+      for (const source of getAcademyVisibleSegments(lesson.initial)) {
+        const hasLegalMove = candidates(lesson.initial).some(
+          (move) =>
+            move.from?.position === source.position &&
+            move.from.segment === source.segment &&
+            isAcademyMoveAllowed(lesson, move),
+        );
+        assert.equal(
+          canSelectAcademySource(lesson, source),
+          hasLegalMove,
+          `${lesson.id}: ${JSON.stringify(source)}`,
+        );
+      }
+    }
+    assert.ok(
+      legalWrongGoals > 0,
+      "Legal moves with the wrong goal still permit teaching feedback",
+    );
+  });
+  it("keeps reservoir operation and locked equation positions out of suggested zones", () => {
+    const add = academyLessons.find((l) => l.mode === "add")!;
+    assert.equal(
+      canSelectAcademySource(add, { position: 0, segment: 2 }),
+      false,
+    );
+    assert.equal(
+      isAcademyMoveAllowed(add, {
+        from: null,
+        to: { position: 0, segment: 1 },
+      }),
+      true,
+    );
+    assert.equal(
+      isAcademyMoveAllowed(add, {
+        from: { position: 0, segment: 2 },
+        to: { position: 0, segment: 1 },
+      }),
+      false,
+    );
+    const remove = academyLessons.find((l) => l.mode === "remove")!;
+    assert.equal(
+      isAcademyMoveAllowed(remove, {
+        from: { position: 0, segment: 1 },
+        to: null,
+      }),
+      true,
+    );
+    assert.equal(
+      isAcademyMoveAllowed(remove, {
+        from: null,
+        to: { position: 0, segment: 0 },
+      }),
+      false,
+    );
+    const equation = academyLessons.find((l) => l.id === "academy-6-1")!;
+    assert.equal(
+      canSelectAcademySource(equation, { position: 0, segment: 5 }),
+      false,
+    );
+    assert.equal(
+      canSelectAcademySource(equation, { position: 3, segment: 0 }),
+      false,
+    );
+    assert.equal(
+      isAcademyMoveAllowed(equation, {
+        from: { position: 4, segment: 5 },
+        to: { position: 4, segment: 3 },
+      }),
+      true,
+    );
   });
 });

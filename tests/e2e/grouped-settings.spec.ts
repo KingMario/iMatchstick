@@ -124,8 +124,8 @@ test("settings disclosures support keyboard, language changes and reopen without
   await dialog.getByRole("checkbox", { name: "计时", exact: true }).check();
   await dialog.getByRole("checkbox", { name: "音效", exact: true }).check();
   await dialog
-    .getByRole("radiogroup", { name: "拖拽惯用手", exact: true })
-    .getByText("左手拖拽", { exact: true })
+    .getByRole("radiogroup", { name: "惯用手", exact: true })
+    .getByText("左手", { exact: true })
     .click();
   await dialog.getByRole("button", { name: "EN", exact: true }).click();
   await expect(

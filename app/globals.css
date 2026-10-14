@@ -453,11 +453,11 @@ h1 {
 }
 
 .phone-layout .equation[data-drag-hand="left"] > .match-char {
-  transform: translateX(var(--hand-offset));
+  transform: translateX(calc(-1 * var(--hand-offset)));
 }
 
 .phone-layout .equation[data-drag-hand="right"] > .match-char {
-  transform: translateX(calc(-1 * var(--hand-offset)));
+  transform: translateX(var(--hand-offset));
 }
 
 .phone-layout .operator-char,
@@ -1679,4 +1679,16 @@ footer a:hover {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Snapped ghosts reflect the destination before release; free dragging still spins. */
+.drag-ghost.snapped .matchstick-art {
+  animation: none;
+}
+
+.settings-hand-hint {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }

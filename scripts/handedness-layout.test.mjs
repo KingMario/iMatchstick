@@ -7,8 +7,8 @@ const game = readFileSync("components/MatchstickGame.tsx", "utf8");
 
 test("handedness translates only phone glyphs from centered layout", () => {
   for (const [hand, offset] of [
-    ["left", "var(--hand-offset)"],
-    ["right", "calc(-1 * var(--hand-offset))"],
+    ["left", "calc(-1 * var(--hand-offset))"],
+    ["right", "var(--hand-offset)"],
   ]) {
     const selector = `.phone-layout .equation[data-drag-hand="${hand}"] > .match-char`;
     const rule = css.slice(css.indexOf(selector)).match(/^[^{]+\{([^}]+)\}/);

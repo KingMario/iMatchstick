@@ -97,6 +97,7 @@ export function GameSettings({
               className="hand-switch"
               role="radiogroup"
               aria-label={text.dragHand}
+              aria-describedby="hand-preference-hint"
             >
               {(["left", "right"] as const).map((hand) => (
                 <label key={hand}>
@@ -114,6 +115,11 @@ export function GameSettings({
               ))}
             </div>
           </div>
+        )}
+        {isPhone && (
+          <p className="settings-hand-hint" id="hand-preference-hint">
+            {text.dragHandHint}
+          </p>
         )}
         <label className="settings-row">
           <span>{text.timer}</span>

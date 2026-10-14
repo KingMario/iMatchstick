@@ -207,7 +207,7 @@ async function expectPhoneAlignment(page: Page, hand: Hand) {
   );
   const magnitude = Math.min(visibleLengthCap, freeSpace);
   // Layout quantizes each glyph/gap independently; permit subpixel accumulation.
-  expect(Math.abs(dx - (hand === "left" ? 1 : -1) * magnitude)).toBeLessThan(
+  expect(Math.abs(dx - (hand === "left" ? -1 : 1) * magnitude)).toBeLessThan(
     0.2,
   );
   expect(Math.abs(dx)).toBeLessThanOrEqual(visibleLengthCap + 0.05);
@@ -219,7 +219,7 @@ async function expectPhoneAlignment(page: Page, hand: Hand) {
     true,
   );
   if (freeSpace < visibleLengthCap) {
-    expect(Math.abs((hand === "left" ? rightGap : leftGap) - 12)).toBeLessThan(
+    expect(Math.abs((hand === "left" ? leftGap : rightGap) - 12)).toBeLessThan(
       0.2,
     );
   }
@@ -259,7 +259,7 @@ async function selectHand(page: Page, language: Language, hand: Hand) {
     .click();
   const dialog = page.getByRole("dialog");
   const group = dialog.getByRole("radiogroup", {
-    name: language === "zh" ? "拖拽惯用手" : "Drag hand",
+    name: language === "zh" ? "惯用手" : "Preferred hand",
     exact: true,
   });
   const radio = group.locator(`input[value="${hand}"]`);
@@ -386,7 +386,7 @@ test.describe("phone handedness alignment", () => {
     }
 
     for (const portrait of [false, true]) {
-      test(`offset touch drop on aligned board: ${hand} ${portrait ? "portrait" : "landscape"}`, async ({
+      test(`finger-position touch drop on aligned board: ${hand} ${portrait ? "portrait" : "landscape"}`, async ({
         page,
         context,
       }) => {
@@ -398,7 +398,6 @@ test.describe("phone handedness alignment", () => {
         const source = page.locator('[data-position="4"][data-segment="3"]');
         await expect(source).toBeEnabled();
         const box = (await source.boundingBox())!;
-        const length = Math.max(box.width, box.height);
         const x = box.x + box.width / 2;
         const y = box.y + box.height / 2;
         const cdp = await context.newCDPSession(page);
@@ -411,21 +410,17 @@ test.describe("phone handedness alignment", () => {
             type: "touchMove",
             touchPoints: [{ x: x + 12, y: y + 12 }],
           });
-          await expect(page.locator(".drag-ghost")).toBeVisible();
+          await expect(page.locator(".touch-magnifier")).toBeVisible();
           const target = page.locator('[data-position="4"][data-segment="5"]');
           await expect(target).toBeEnabled();
           const destination = (await target.boundingBox())!;
-          // Keep the existing screen-space helper offset, including hand mirroring.
-          const logicalX = length * -1.3 * 0.65 * (hand === "left" ? -1 : 1);
-          const logicalY = length * -0.3 * 0.65;
-          const offsetX = portrait ? -logicalY : logicalX;
-          const offsetY = portrait ? logicalX : logicalY;
+          // Touch drop follows the finger, independent of hand preference.
           await cdp.send("Input.dispatchTouchEvent", {
             type: "touchMove",
             touchPoints: [
               {
-                x: destination.x + destination.width / 2 - offsetX,
-                y: destination.y + destination.height / 2 - offsetY,
+                x: destination.x + destination.width / 2,
+                y: destination.y + destination.height / 2,
               },
             ],
           });
@@ -493,7 +488,7 @@ test.describe("desktop ignores saved phone handedness", () => {
             .click();
           await expect(
             page.getByRole("dialog").getByRole("radiogroup", {
-              name: language === "zh" ? "拖拽惯用手" : "Drag hand",
+              name: language === "zh" ? "惯用手" : "Preferred hand",
               exact: true,
             }),
           ).toHaveCount(0);

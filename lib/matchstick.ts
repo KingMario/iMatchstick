@@ -1,3 +1,4 @@
+import { canTransferMatchstick } from "./matchstickSlots";
 export type Operator = "+" | "-";
 
 export type Movement = {
@@ -376,9 +377,18 @@ export function canDropMatchstick(
   from: SelectedSegment,
   to: SelectedSegment,
 ) {
-  const movedExpression = tryMove(expression, from, to);
-
-  return Boolean(movedExpression) && !hasInvalidLeadingZero(movedExpression);
+  return canTransferMatchstick({
+    cards: expression.split(""),
+    from,
+    to,
+    getVisibleSegments,
+    isLegal: () => {
+      const movedExpression = tryMove(expression, from, to);
+      return (
+        Boolean(movedExpression) && !hasInvalidLeadingZero(movedExpression)
+      );
+    },
+  });
 }
 
 export function isAnswer(expression: string, answers: string[]) {

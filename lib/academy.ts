@@ -1,3 +1,4 @@
+import { canTransferMatchstick } from "./matchstickSlots";
 import {
   getVisibleSegments,
   isValidEquation,
@@ -636,4 +637,35 @@ export function getAcademySolution(
   return validateAcademyMove(lesson, movement).reason === "success"
     ? movement
     : null;
+}
+
+/** A legal teaching move may still miss the goal; malformed/forbidden moves never
+ * become suggested drop zones. This shares the authoritative validator. */
+export function isAcademyMoveAllowed(
+  lesson: AcademyLesson,
+  movement: AcademyMovement,
+) {
+  return canTransferMatchstick({
+    cards: lesson.initial,
+    ...movement,
+    getVisibleSegments,
+    isLegal: () => {
+      const { reason } = validateAcademyMove(lesson, movement);
+      return reason === "success" || reason === "wrong-target";
+    },
+  });
+}
+
+export function canSelectAcademySource(
+  lesson: AcademyLesson,
+  source: SelectedSegment,
+) {
+  if (lesson.mode === "recognition" || lesson.permitted.operation === "add")
+    return false;
+  if (lesson.permitted.operation === "remove") {
+    return isAcademyMoveAllowed(lesson, { from: source, to: null });
+  }
+  return getAcademyEmptySegments(lesson.initial).some((to) =>
+    isAcademyMoveAllowed(lesson, { from: source, to }),
+  );
 }

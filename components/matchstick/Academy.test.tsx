@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import {
   Academy,
   AcademyLessonView,
+  AcademyChapterLessons,
   shouldSuppressAcademyClick,
 } from "./Academy";
 import { academyLessons, getAcademySolution } from "../../lib/academy";
@@ -21,19 +22,18 @@ const defaults = {
 
 describe("academy presentation", () => {
   for (const language of ["zh", "en"] as const) {
-    it(`offers all 24 lessons without locking progression (${language})`, () => {
+    it(`offers six chapters without locking progression (${language})`, () => {
       const html = renderToStaticMarkup(
         <Academy {...defaults} language={language} />,
       );
       assert.equal((html.match(/class="academy-chapter"/g) ?? []).length, 6);
-      assert.equal((html.match(/data-lesson-id="academy-/g) ?? []).length, 24);
-      for (const lesson of academyLessons)
-        assert.ok(html.includes(`data-lesson-id="${lesson.id}"`));
+      assert.equal((html.match(/data-chapter-id=/g) ?? []).length, 6);
+      assert.equal((html.match(/data-lesson-id=/g) ?? []).length, 0);
       assert.ok(html.includes(academyCopy[language].intro));
       assert.ok(!html.includes("disabled="));
       assert.ok(html.includes('aria-valuenow="0"'));
     });
-    it(`renders every practice mode with free skip, undo, reset, and hints (${language})`, () => {
+    it(`renders every practice mode with free skip, restart, and help (${language})`, () => {
       for (const [index, lesson] of academyLessons.entries()) {
         const html = renderToStaticMarkup(
           <AcademyLessonView
@@ -50,7 +50,6 @@ describe("academy presentation", () => {
           "academy-board",
           "academy-next",
           "academy-reset",
-          "academy-undo",
           "academy-hint",
           "academy-overview",
         ])
@@ -77,6 +76,28 @@ describe("academy presentation", () => {
       }
     });
   }
+  it("offers exactly four unlocked lessons in each chapter", () => {
+    for (const chapterId of [1, 2, 3, 4, 5, 6]) {
+      const html = renderToStaticMarkup(
+        <AcademyChapterLessons
+          chapterId={chapterId}
+          language="en"
+          completedLessonIds={[academyLessons[0].id]}
+          onSelect={noop}
+        />,
+      );
+      assert.equal((html.match(/data-lesson-id=/g) ?? []).length, 4);
+      for (const lesson of academyLessons.filter(
+        (item) => item.chapterId === chapterId,
+      ))
+        assert.ok(html.includes(`data-lesson-id="${lesson.id}"`));
+      assert.ok(!html.includes("disabled="));
+      assert.equal(
+        (html.match(/academy-lesson-link done/g) ?? []).length,
+        chapterId === 1 ? 1 : 0,
+      );
+    }
+  });
   it("deduplicates progress and ignores unrecognized ids", () => {
     const html = renderToStaticMarkup(
       <Academy
@@ -89,7 +110,7 @@ describe("academy presentation", () => {
       />,
     );
     assert.ok(html.includes('aria-valuenow="1"'));
-    assert.equal((html.match(/academy-lesson-link done/g) ?? []).length, 1);
+    assert.ok(html.includes("1 / 4"));
   });
   it("celebrates complete progress without blocking replay access", () => {
     const html = renderToStaticMarkup(
@@ -99,7 +120,7 @@ describe("academy presentation", () => {
       />,
     );
     assert.ok(html.includes(academyCopy.en.allDone));
-    assert.equal((html.match(/data-lesson-id="academy-/g) ?? []).length, 24);
+    assert.equal((html.match(/data-chapter-id=/g) ?? []).length, 6);
   });
   it("visually separates independent cards but keeps equations together", () => {
     for (const lesson of academyLessons) {
@@ -163,10 +184,7 @@ describe("academy presentation", () => {
           onNext={noop}
         />,
       );
-      assert.equal(
-        html.includes('class="academy-hint-card"'),
-        lesson.hintLevel === 1,
-      );
+      assert.equal(html.includes(lesson.hint.en), lesson.hintLevel === 1);
       assert.equal(html.includes("placeholder"), lesson.hintLevel === 2);
     }
   });

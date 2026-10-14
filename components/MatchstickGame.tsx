@@ -1,10 +1,13 @@
 "use client";
 
+import { TouchMagnifier } from "./matchstick/TouchMagnifier";
+
 import {
   type CSSProperties,
   type MouseEvent,
   type PointerEvent,
   useEffect,
+  useCallback,
   useMemo,
   useRef,
   useState,
@@ -36,9 +39,8 @@ import {
 import {
   type DragHand,
   dragStartThreshold,
-  findSnapTarget,
-  getDragHelperMetrics,
-  getDragHelperPoint,
+  resolveDragTarget,
+  getPointerDragMetrics,
   moveDragToPointer,
 } from "@/lib/drag";
 import {
@@ -93,6 +95,9 @@ type MessageKey =
 
 type DragState = {
   from: SelectedSegment;
+  touchMagnifier: boolean;
+  pointerX: number;
+  pointerY: number;
   originX: number;
   originY: number;
   offsetX: number;
@@ -102,12 +107,17 @@ type DragState = {
   y: number;
   orientation: "horizontal" | "vertical";
   returning: boolean;
+  snapped?: boolean;
+  originOrientation: "horizontal" | "vertical";
 } | null;
 
 type PendingDrag = {
   from: SelectedSegment;
   startX: number;
   startY: number;
+  touchMagnifier: boolean;
+  pointerX: number;
+  pointerY: number;
   originX: number;
   originY: number;
   offsetX: number;
@@ -164,6 +174,9 @@ export function MatchstickGame() {
   const [phonePortrait, setPhonePortrait] = useState(false);
   const suppressNextClick = useRef(false);
   const pendingDrag = useRef<PendingDrag>(null);
+  const [pendingSource, setPendingSource] = useState<SelectedSegment | null>(
+    null,
+  );
   const puzzleRequestId = useRef(0);
   const dragRef = useRef<DragState>(null);
   const dragReturnTimer = useRef<number | null>(null);
@@ -177,6 +190,37 @@ export function MatchstickGame() {
     isLoading || solved || timedOut || academyView !== null;
 
   const answersFound = useMemo(() => solvedAnswers.length, [solvedAnswers]);
+
+  const clearTouchDrag = useCallback(() => {
+    if (
+      !dragRef.current?.touchMagnifier &&
+      !pendingDrag.current?.touchMagnifier
+    )
+      return;
+    if (dragReturnTimer.current !== null) {
+      window.clearTimeout(dragReturnTimer.current);
+      dragReturnTimer.current = null;
+    }
+    pendingDrag.current = null;
+    setPendingSource(null);
+    dragRef.current = null;
+    setDrag(null);
+    setSelected(null);
+    suppressNextClick.current = true;
+  }, []);
+
+  // A touch lens must never survive an interrupted gesture or hidden page.
+  useEffect(() => {
+    const onHidden = () => {
+      if (document.hidden) clearTouchDrag();
+    };
+    window.addEventListener("blur", clearTouchDrag);
+    document.addEventListener("visibilitychange", onHidden);
+    return () => {
+      window.removeEventListener("blur", clearTouchDrag);
+      document.removeEventListener("visibilitychange", onHidden);
+    };
+  }, [clearTouchDrag]);
 
   useEffect(() => {
     setMounted(true);
@@ -224,6 +268,7 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
+    setPendingSource(null);
     setSolved(false);
     setSolvedAnswers([]);
     setTimeLeft(60);
@@ -277,6 +322,7 @@ export function MatchstickGame() {
         (dragRef.current || pendingDrag.current)
       ) {
         pendingDrag.current = null;
+        setPendingSource(null);
         dragRef.current = null;
         setDrag(null);
         setSelected(null);
@@ -384,9 +430,10 @@ export function MatchstickGame() {
     if (timerEnabled && timeLeft === 0 && !solved) {
       cancelVoice();
       setSelected(null);
+      clearTouchDrag();
       setMessageKey("timeout");
     }
-  }, [timerEnabled, timeLeft, solved]);
+  }, [timerEnabled, timeLeft, solved, clearTouchDrag]);
 
   useEffect(() => {
     if (listening || !voiceCaption) return;
@@ -416,6 +463,7 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
+    setPendingSource(null);
     setSolved(false);
     setSolvedAnswers([]);
     setTimeLeft(60);
@@ -438,6 +486,7 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
+    setPendingSource(null);
     cancelVoice();
     const requestId = ++puzzleRequestId.current;
     void pickPuzzleFromBook(nextDifficulty, puzzle.expression).then(
@@ -472,6 +521,7 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
+    setPendingSource(null);
     setSolved(false);
     setMessageKey("selectHint");
   }
@@ -497,6 +547,7 @@ export function MatchstickGame() {
     setSelected(null);
     setDragState(null);
     pendingDrag.current = null;
+    setPendingSource(null);
     setSolved(true);
     setSolvedAnswers((current) =>
       current.includes(nextExpression) ? current : [...current, nextExpression],
@@ -686,8 +737,9 @@ export function MatchstickGame() {
   }
 
   function canDropSelectedMatchstick(position: number, segment: number) {
-    return selected
-      ? canDropMatchstick(displayExpression, selected, { position, segment })
+    const source = pendingSource ?? selected;
+    return source
+      ? canDropMatchstick(displayExpression, source, { position, segment })
       : false;
   }
 
@@ -715,14 +767,18 @@ export function MatchstickGame() {
     const originX = rect.left + rect.width / 2;
     const originY = rect.top + rect.height / 2;
     const from = { position, segment };
-    const helperMetrics = getDragHelperMetrics(
-      rect,
-      orientation,
+    const helperMetrics = getPointerDragMetrics(rect, orientation, {
       phonePortrait,
       dragHand,
-    );
+      pointerType: event.pointerType,
+      isPhone,
+    });
+    setPendingSource(from);
     pendingDrag.current = {
       from,
+      touchMagnifier: helperMetrics.touchMagnifier,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
       startX: event.clientX,
       startY: event.clientY,
       originX,
@@ -731,6 +787,16 @@ export function MatchstickGame() {
       offsetY: helperMetrics.offsetY,
       helperSize: helperMetrics.helperSize,
       orientation,
+    };
+  }
+
+  function snapOptions(from: SelectedSegment) {
+    return {
+      isAllowed: (element: HTMLElement) =>
+        canDropMatchstick(displayExpression, from, {
+          position: Number(element.dataset.position),
+          segment: Number(element.dataset.segment),
+        }),
     };
   }
 
@@ -755,6 +821,9 @@ export function MatchstickGame() {
         moveDragToPointer(
           {
             from: pending.from,
+            touchMagnifier: pending.touchMagnifier,
+            pointerX: event.clientX,
+            pointerY: event.clientY,
             originX: pending.originX,
             originY: pending.originY,
             offsetX: pending.offsetX,
@@ -763,14 +832,17 @@ export function MatchstickGame() {
             x: pending.originX,
             y: pending.originY,
             orientation: pending.orientation,
+            originOrientation: pending.orientation,
             returning: false,
           },
           event,
           false,
           true,
+          snapOptions(pending.from),
         ),
       );
       pendingDrag.current = null;
+      setPendingSource(null);
       return;
     }
 
@@ -779,7 +851,15 @@ export function MatchstickGame() {
     }
 
     suppressNextClick.current = true;
-    setDragState(moveDragToPointer(currentDrag, event, false, true));
+    setDragState(
+      moveDragToPointer(
+        currentDrag,
+        event,
+        false,
+        true,
+        snapOptions(currentDrag.from),
+      ),
+    );
   }
 
   function handleSegmentPointerUp(event: PointerEvent<HTMLButtonElement>) {
@@ -787,6 +867,7 @@ export function MatchstickGame() {
 
     if (pendingDrag.current && !currentDrag) {
       pendingDrag.current = null;
+      setPendingSource(null);
       return;
     }
 
@@ -794,16 +875,11 @@ export function MatchstickGame() {
       return;
     }
 
-    const helperPoint = getDragHelperPoint(
+    const target = resolveDragTarget(
       event,
-      currentDrag.offsetX,
-      currentDrag.offsetY,
-    );
-    const target =
-      findSnapTarget(helperPoint)?.element ??
-      document
-        .elementFromPoint(helperPoint.x, helperPoint.y)
-        ?.closest<HTMLElement>(".match-segment.placeholder");
+      currentDrag,
+      snapOptions(currentDrag.from),
+    ).target?.element;
 
     if (!target?.dataset.position || !target.dataset.segment) {
       if (suppressNextClick.current) {
@@ -833,6 +909,7 @@ export function MatchstickGame() {
 
   function handleSegmentPointerCancel() {
     pendingDrag.current = null;
+    setPendingSource(null);
 
     if (suppressNextClick.current) {
       returnDraggedMatch(() => setSelected(null));
@@ -852,6 +929,11 @@ export function MatchstickGame() {
   function returnDraggedMatch(afterReturn?: () => void) {
     clearDragReturnTimer();
     const current = dragRef.current;
+    if (current?.touchMagnifier) {
+      setDragState(null);
+      afterReturn?.();
+      return;
+    }
     setDragState(
       current
         ? {
@@ -859,6 +941,8 @@ export function MatchstickGame() {
             x: current.originX,
             y: current.originY,
             returning: true,
+            orientation: current.originOrientation,
+            snapped: true,
           }
         : current,
     );
@@ -901,6 +985,7 @@ export function MatchstickGame() {
     );
     clearDragReturnTimer();
     pendingDrag.current = null;
+    setPendingSource(null);
     setDragState(null);
     setSelected(null);
     cancelVoice();
@@ -916,6 +1001,7 @@ export function MatchstickGame() {
   }
 
   function openSettings() {
+    clearTouchDrag();
     cancelVoice();
     setMessageKey((current) =>
       current === "voiceListening" ? "selectHint" : current,
@@ -934,8 +1020,10 @@ export function MatchstickGame() {
 
   return (
     <main
+      onLostPointerCapture={clearTouchDrag}
       className={[
         "app-shell",
+        academyView !== null ? "academy-active" : "",
         isPhone ? "phone-layout" : "",
         phonePortrait ? "phone-portrait" : "",
       ].join(" ")}
@@ -946,14 +1034,13 @@ export function MatchstickGame() {
           data-testid="academy-welcome"
           aria-labelledby="academy-welcome-title"
         >
-          <p className="brand">Mario Studio</p>
           <h1 id="academy-welcome-title">
             {language === "zh" ? "火柴入门学园" : "Matchstick Academy"}
           </h1>
           <p>
             {language === "zh"
-              ? "从认识数字到修好第一道等式，六个小章节，慢慢玩就会了。"
-              : "Six short chapters take you from recognizing digits to fixing your first equation."}
+              ? "六章、24 个小练习，从认数字到修好第一道等式。"
+              : "Six chapters, 24 short lessons: from digits to your first equation."}
           </p>
           <p>
             {language === "zh"
@@ -997,6 +1084,7 @@ export function MatchstickGame() {
         <Academy
           language={language}
           phonePortrait={phonePortrait}
+          isPhone={isPhone}
           dragHand={dragHand}
           completedLessonIds={academyProgress.completedLessonIds}
           onComplete={(id) =>
@@ -1150,7 +1238,9 @@ export function MatchstickGame() {
                           solved ? successFeedback?.destination : null
                         }
                         selected={selected}
-                        selectionActive={selected !== null}
+                        selectionActive={
+                          pendingSource !== null || selected !== null
+                        }
                         interactionLocked={interactionLocked}
                         onSegmentClick={handleSegmentClick}
                         canDropSegment={canDropSelectedMatchstick}
@@ -1175,6 +1265,7 @@ export function MatchstickGame() {
                     onNewPuzzle={startNewPuzzle}
                     onUndo={undoPuzzle}
                     onToggleAnswers={() => {
+                      clearTouchDrag();
                       cancelVoice();
                       setMessageKey((current) =>
                         current === "voiceListening" ? "selectHint" : current,
@@ -1185,30 +1276,51 @@ export function MatchstickGame() {
                   />
                 </div>
 
-                {drag
-                  ? createPortal(
-                      <div
-                        className={`drag-ghost ${drag.orientation} ${drag.returning ? "returning" : ""}`}
-                        aria-hidden="true"
-                        style={{
-                          left: drag.x,
-                          top: drag.y,
-                          width: drag.helperSize,
-                          height: drag.helperSize,
-                        }}
-                      >
-                        <MatchstickArt
-                          orientation="horizontal"
-                          reversed={
-                            stickDirections[drag.from.position]?.[
-                              drag.from.segment
-                            ]
-                          }
-                        />
-                      </div>,
-                      document.body,
-                    )
-                  : null}
+                {drag?.touchMagnifier ? (
+                  <TouchMagnifier
+                    surface={equationRef.current}
+                    point={{ x: drag.pointerX, y: drag.pointerY }}
+                    rotatedClockwise={phonePortrait}
+                    stick={{
+                      x: drag.x,
+                      y: drag.y,
+                      orientation: drag.orientation,
+                      snapped: Boolean(drag.snapped),
+                      reversed:
+                        Boolean(
+                          stickDirections[drag.from.position]?.[
+                            drag.from.segment
+                          ],
+                        ) !==
+                        (phonePortrait && drag.orientation === "vertical"),
+                    }}
+                  />
+                ) : drag ? (
+                  createPortal(
+                    <div
+                      className={`drag-ghost ${drag.orientation} ${drag.returning ? "returning" : ""} ${drag.snapped ? "snapped" : ""}`}
+                      aria-hidden="true"
+                      style={{
+                        left: drag.x,
+                        top: drag.y,
+                        width: drag.helperSize,
+                        height: drag.helperSize,
+                      }}
+                    >
+                      <MatchstickArt
+                        orientation={
+                          drag.snapped ? drag.orientation : "horizontal"
+                        }
+                        reversed={
+                          stickDirections[drag.from.position]?.[
+                            drag.from.segment
+                          ]
+                        }
+                      />
+                    </div>,
+                    document.body,
+                  )
+                ) : null}
               </section>
             </div>
           </section>

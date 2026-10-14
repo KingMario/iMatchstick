@@ -47,21 +47,21 @@ for (const device of [
       await page.getByRole("button", { name: "设置", exact: true }).click();
       const dialog = page.getByRole("dialog");
       const hand = dialog.getByRole("radiogroup", {
-        name: "拖拽惯用手",
+        name: "惯用手",
         exact: true,
       });
       if (device.isMobile) {
         await expect(hand).toBeVisible();
-        await hand.getByText("左手拖拽", { exact: true }).click();
+        await hand.getByText("左手", { exact: true }).click();
         await expect(
-          hand.getByRole("radio", { name: "左手拖拽", exact: true }),
+          hand.getByRole("radio", { name: "左手", exact: true }),
         ).toBeChecked();
       } else {
         await expect(hand).toHaveCount(0);
       }
       await dialog.getByRole("button", { name: "EN", exact: true }).click();
       await expect(
-        dialog.getByRole("radiogroup", { name: "Drag hand", exact: true }),
+        dialog.getByRole("radiogroup", { name: "Preferred hand", exact: true }),
       ).toHaveCount(device.isMobile ? 1 : 0);
     } finally {
       await context.close();
@@ -90,15 +90,15 @@ for (const language of ["zh", "en"] as const) {
     await settings.click();
     const dialog = page.getByRole("dialog");
     const group = dialog.getByRole("radiogroup", {
-      name: language === "zh" ? "拖拽惯用手" : "Drag hand",
+      name: language === "zh" ? "惯用手" : "Preferred hand",
       exact: true,
     });
     const left = group.getByRole("radio", {
-      name: language === "zh" ? "左手拖拽" : "Left hand",
+      name: language === "zh" ? "左手" : "Left hand",
       exact: true,
     });
     const right = group.getByRole("radio", {
-      name: language === "zh" ? "右手拖拽" : "Right hand",
+      name: language === "zh" ? "右手" : "Right hand",
       exact: true,
     });
     await expect(right).toBeChecked();

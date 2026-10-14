@@ -1,3 +1,7 @@
+import {
+  getSegmentOrientation,
+  getScreenOrientation,
+} from "../../lib/matchstickSlots";
 import { type PointerEvent } from "react";
 import { MatchstickArt } from "./MatchstickArt";
 import {
@@ -97,9 +101,10 @@ export function MatchstickChar({
           !visible && Boolean(showTargetOutline?.(position, segment));
         const orientation = getSegmentOrientation(char, segment);
         // Drag metrics use the screen-space bounds after the equation rotates.
-        const visualOrientation = rotatedClockwise
-          ? flipOrientation(orientation)
-          : orientation;
+        const visualOrientation = getScreenOrientation(
+          orientation,
+          rotatedClockwise,
+        );
         const actionable =
           !interactionLocked &&
           ((visible && draggable) ||
@@ -141,6 +146,7 @@ export function MatchstickChar({
             )}
             data-position={position}
             data-segment={segment}
+            data-screen-orientation={visualOrientation}
             onClick={() => onSegmentClick(position, segment, visible)}
             onPointerDown={(event) =>
               onSegmentPointerDown(
@@ -168,18 +174,4 @@ export function MatchstickChar({
       })}
     </div>
   );
-}
-
-function getSegmentOrientation(char: string, segment: number) {
-  if (char === "+" || char === "-") {
-    return segment === 1 ? "vertical" : "horizontal";
-  }
-
-  return segment === 0 || segment === 2 || segment === 3 || segment === 5
-    ? "vertical"
-    : "horizontal";
-}
-
-function flipOrientation(orientation: "horizontal" | "vertical") {
-  return orientation === "horizontal" ? "vertical" : "horizontal";
 }

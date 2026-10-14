@@ -6,7 +6,7 @@ const settingsKey = "imatchstick-pwa-settings";
 const statsKey = "imatchstick-pwa-stats";
 const originalStats = { solved: 12, streak: 3, bypassed: 4 };
 
-async function returningVisitor(
+export async function returningVisitor(
   page: Page,
   language: "zh" | "en" = "en",
   timerEnabled = false,
@@ -29,7 +29,7 @@ async function returningVisitor(
   );
 }
 
-async function openAcademy(page: Page, language: "zh" | "en" = "en") {
+export async function openAcademy(page: Page, language: "zh" | "en" = "en") {
   await page
     .getByRole("button", {
       name: language === "zh" ? "设置" : "Settings",
@@ -170,12 +170,18 @@ test("corrupt academy progress is recovered without losing competitive data", as
   ).toEqual(originalStats);
 });
 
-async function enterLesson(page: Page, id: string) {
+export async function enterLesson(page: Page, id: string) {
+  const lesson = academyLessons.find((item) => item.id === id)!;
+  if (!(await page.locator(`[data-lesson-id="${id}"]`).count())) {
+    if (await page.getByTestId("academy-chapters-back").count())
+      await page.getByTestId("academy-chapters-back").click();
+    await page.locator(`[data-chapter-id="${lesson.chapterId}"]`).click();
+  }
   await page.locator(`[data-lesson-id="${id}"]`).click();
   await expect(page.getByTestId("academy-lesson")).toBeVisible();
 }
 
-function slot(page: Page, point: { position: number; segment: number }) {
+export function slot(page: Page, point: { position: number; segment: number }) {
   return page
     .getByTestId("academy-board")
     .locator(
@@ -240,6 +246,7 @@ test("hint, reset, next, replay and skipped lesson maintain distinct completion"
   const solution = getAcademySolution(
     academyLessons.find((lesson) => lesson.id === "academy-3-4")!,
   )!;
+  await page.getByTestId("academy-hint-close").click();
   await slot(page, solution.from!).click();
   await page.getByTestId("academy-reset").click();
   await expect(
@@ -248,7 +255,7 @@ test("hint, reset, next, replay and skipped lesson maintain distinct completion"
   await slot(page, solution.from!).click();
   await slot(page, solution.to!).click();
   await expect(page.getByTestId("academy-lesson")).toContainText("You did it!");
-  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await page.getByTestId("academy-reset").click();
   await slot(page, solution.from!).click();
   await slot(page, solution.to!).click();
   await page.getByTestId("academy-next").click();
@@ -350,7 +357,7 @@ test("unmounting an active drag releases capture and removes its portal", async 
   await page.goto("/?puzzle=7-5%3D3");
   await openAcademy(page);
   await enterLesson(page, "academy-3-4");
-  const source = slot(page, { position: 0, segment: 1 });
+  const source = slot(page, { position: 0, segment: 2 });
   await source.scrollIntoViewIfNeeded();
   const bounds = (await source.boundingBox())!;
   await page.mouse.move(
@@ -375,24 +382,21 @@ test("unmounting an active drag releases capture and removes its portal", async 
   expect(errors).toEqual([]);
 });
 
-test("invalid shape can be undone without progress or score penalty", async ({
+test("invalid shape targets are unavailable without progress or score penalty", async ({
   page,
 }) => {
   await returningVisitor(page);
   await page.goto("/?puzzle=7-5%3D3");
   await openAcademy(page);
-  await enterLesson(page, "academy-3-4");
-  await slot(page, { position: 0, segment: 1 }).click();
-  await slot(page, { position: 0, segment: 6 }).click();
-  await expect(page.locator(".academy-status")).toContainText(
-    "does not make a complete digit",
-  );
+  await enterLesson(page, "academy-3-1");
+  await slot(page, { position: 0, segment: 5 }).click();
+  await expect(slot(page, { position: 0, segment: 0 })).toHaveCount(0);
   await expect(page.getByTestId("academy-success")).toHaveCount(0);
-  await page.getByTestId("academy-undo").click();
+  await page.getByTestId("academy-reset").click();
   await expect(page.locator(".academy-status")).not.toHaveClass(/error/);
-  await expect(page.getByTestId("academy-undo")).toBeDisabled();
+  await expect(page.getByTestId("academy-reset")).toBeEnabled();
   const solution = getAcademySolution(
-    academyLessons.find((lesson) => lesson.id === "academy-3-4")!,
+    academyLessons.find((lesson) => lesson.id === "academy-3-1")!,
   )!;
   await slot(page, solution.from!).click();
   await slot(page, solution.to!).click();
@@ -419,8 +423,8 @@ for (const language of ["zh", "en"] as const) {
       await page.goto("/?puzzle=7-5%3D3");
       await openAcademy(page, language);
       const academy = page.getByTestId("academy");
-      await expect(academy.locator(".academy-chapter")).toHaveCount(6);
-      await expect(academy.locator("button[data-lesson-id]")).toHaveCount(24);
+      await expect(academy.getByTestId("academy-chapter")).toHaveCount(6);
+      await expect(academy.locator("button[data-lesson-id]")).toHaveCount(0);
       expect(
         await academy.evaluate(
           (element) => element.scrollWidth <= element.clientWidth + 1,
@@ -467,9 +471,7 @@ test("keyboard recognition, movement, Escape and replay work without pointer inp
   await source.press("Space");
   await target.press("Enter");
   await expect(page.getByTestId("academy-success")).toBeVisible();
-  await page
-    .getByRole("button", { name: "Try again", exact: true })
-    .press("Enter");
+  await page.getByTestId("academy-reset").press("Enter");
   await expect(page.getByTestId("academy-success")).toHaveCount(0);
   await source.press("Enter");
   await target.press("Space");
@@ -535,12 +537,12 @@ test("native pointer cancellation removes the ghost and permits immediate keyboa
       type: "touchMove",
       touchPoints: [{ x: x + 20, y: y + 20 }],
     });
-    await expect(page.locator(".academy-ghost")).toBeVisible();
+    await expect(page.getByTestId("touch-magnifier")).toBeVisible();
     await cdp.send("Input.dispatchTouchEvent", {
       type: "touchCancel",
       touchPoints: [],
     });
-    await expect(page.locator(".academy-ghost")).toHaveCount(0);
+    await expect(page.getByTestId("touch-magnifier")).toHaveCount(0);
     await expect(source).not.toHaveClass(/selected/);
     await expect(page.getByTestId("academy-success")).toHaveCount(0);
     await source.press("Enter");
@@ -552,11 +554,11 @@ test("native pointer cancellation removes the ghost and permits immediate keyboa
   }
 });
 
-test("portrait academy scrolls natively along its rotated surface", async ({
+test("exceptionally small portrait academy retains native fallback scrolling", async ({
   page,
   context,
 }) => {
-  await page.setViewportSize({ width: 320, height: 568 });
+  await page.setViewportSize({ width: 240, height: 480 });
   await returningVisitor(page);
   await page.goto("/?puzzle=7-5%3D3");
   await openAcademy(page);

@@ -18,7 +18,10 @@ const {
 function mount(id, overrides = {}) {
   const lesson = academy.academyLessons.find((item) => item.id === id);
   assert.ok(lesson, id);
-  const slots = [];
+  let slots = [];
+  let lessonSlots = [];
+  let lessonKey = null;
+  let renderedLesson = false;
   let cursor = 0;
   let tree;
   let pendingEffects = [];
@@ -90,7 +93,26 @@ function mount(id, overrides = {}) {
     };
   }
   function jsx(type, props = {}, key) {
-    if (typeof type === "function") return type(props);
+    if (typeof type === "function") {
+      if (overrides.overviewOnly && type.name === "AcademyLessonView")
+        return { type: "lesson-proxy", props, key };
+      if (overrides.fullFlow && type.name === "AcademyLessonView") {
+        renderedLesson = true;
+        if (lessonKey !== key) {
+          lessonSlots = [];
+          lessonKey = key;
+        }
+        const parentSlots = slots,
+          parentCursor = cursor;
+        slots = lessonSlots;
+        cursor = 0;
+        const child = type(props);
+        slots = parentSlots;
+        cursor = parentCursor;
+        return child;
+      }
+      return type(props);
+    }
     const node = { type, props, key };
     if (type === "button") {
       const identity =
@@ -102,6 +124,7 @@ function mount(id, overrides = {}) {
         const captures = new Set();
         const element = {
           captures,
+          focus() {},
           releases: 0,
           setPointerCapture: (pointerId) => captures.add(pointerId),
           hasPointerCapture: (pointerId) => captures.has(pointerId),
@@ -160,9 +183,12 @@ function mount(id, overrides = {}) {
       node.element.dataset = {
         position: String(props["data-position"]),
         segment: String(props["data-segment"]),
+        screenOrientation: props["data-screen-orientation"],
       };
       if (props.ref) props.ref.current = node.element;
     }
+    if (props.ref && !node.element)
+      props.ref.current = { focus() {}, scrollTo() {} };
     return node;
   }
   const react = {
@@ -170,12 +196,13 @@ function mount(id, overrides = {}) {
       const index = cursor++;
       if (!(index in slots))
         slots[index] = typeof initial === "function" ? initial() : initial;
+      const stateSlots = slots;
       return [
-        slots[index],
+        stateSlots[index],
         (value) => {
           assert.ok(mounted, "no state updates after unmount");
-          slots[index] =
-            typeof value === "function" ? value(slots[index]) : value;
+          stateSlots[index] =
+            typeof value === "function" ? value(stateSlots[index]) : value;
         },
       ];
     },
@@ -220,12 +247,19 @@ function mount(id, overrides = {}) {
           if (name === "../../lib/academy") return academy;
           if (name === "../../lib/matchstick") return matchstick;
           if (name === "../../lib/drag") return load("lib/drag.ts");
+          if (
+            name === "../../lib/matchstickSlots" ||
+            name === "./matchstickSlots"
+          )
+            return load("lib/matchstickSlots.ts");
           if (name === "./academyCopy")
             return load("components/matchstick/academyCopy.ts");
           if (name === "./MatchstickChar")
             return load("components/matchstick/MatchstickChar.tsx");
           if (name === "./MatchstickArt")
             return { MatchstickArt: (props) => jsx("art", props) };
+          if (name === "./TouchMagnifier")
+            return { TouchMagnifier: (props) => jsx("touch-magnifier", props) };
           if (name === "./SuccessConfetti")
             return { SuccessConfetti: () => jsx("confetti") };
           throw new Error(`Unexpected import: ${name}`);
@@ -235,10 +269,15 @@ function mount(id, overrides = {}) {
     );
     return exports;
   }
-  const { AcademyLessonView } = load("components/matchstick/Academy.tsx");
+  const { AcademyLessonView, Academy } = load(
+    "components/matchstick/Academy.tsx",
+  );
   function render() {
     cursor = 0;
-    tree = AcademyLessonView({
+    renderedLesson = false;
+    tree = (
+      overrides.overviewOnly || overrides.fullFlow ? Academy : AcademyLessonView
+    )({
       lesson,
       index: academy.academyLessons.indexOf(lesson),
       language: "en",
@@ -251,6 +290,10 @@ function mount(id, overrides = {}) {
       onOverview: () => overview++,
       ...overrides,
     });
+    if (overrides.fullFlow && !renderedLesson) {
+      lessonSlots = [];
+      lessonKey = null;
+    }
     const effects = pendingEffects;
     pendingEffects = [];
     for (const effect of effects) cleanups.push(effect());
@@ -274,7 +317,7 @@ function mount(id, overrides = {}) {
       !node.props.disabled,
       "cannot activate a disabled rendered button",
     );
-    tree.props.onClickCapture({ detail });
+    tree.props.onClickCapture?.({ detail });
     node.props.onClick();
     render();
   }
@@ -302,7 +345,13 @@ function mount(id, overrides = {}) {
     pointer,
     next: () => next,
     overview: () => overview,
-    status: () => find((node) => node.props?.role === "status").props.children,
+    status: () => {
+      const children = find((node) => node.props?.role === "status").props
+        .children;
+      return Array.isArray(children)
+        ? children.filter((child) => typeof child === "string").join("")
+        : children;
+    },
     success: () =>
       nodes().some((node) => node.props?.["data-testid"] === "academy-success"),
     ghost: () =>
@@ -396,13 +445,11 @@ for (const { id } of academy.academyLessons.filter(
   });
 }
 
-test("Academy invalid shape keeps the starting board, explains failure, and permits retry", () => {
+test("Academy invalid shapes are not offered as selectable sources or targets", () => {
   const h = mount("academy-3-1");
-  h.click(h.segment({ position: 0, segment: 1 }));
-  h.click(h.segment({ position: 0, segment: 0 }));
+  assert.ok(h.segment({ position: 0, segment: 1 }).props.disabled);
   assert.ok(!h.success());
   assert.deepEqual(h.completed, []);
-  assert.match(h.status(), /shape|digit|sign/i);
   assert.ok(
     h.segment({ position: 0, segment: 1 }).props.className.includes("visible"),
   );
@@ -410,7 +457,7 @@ test("Academy invalid shape keeps the starting board, explains failure, and perm
   assert.ok(h.success());
 });
 
-test("Academy reset, undo, hint, demonstration, next, and overview use real callbacks", () => {
+test("Academy restart, hint, demonstration, next, and overview use real callbacks", () => {
   const h = mount("academy-3-4");
   assert.ok(
     !h.nodes().some((node) => node.props?.className === "academy-hint-card"),
@@ -444,7 +491,7 @@ test("Academy reset, undo, hint, demonstration, next, and overview use real call
       .props.className.includes("visible"),
   );
   h.click(h.segment(academy.getAcademySolution(h.lesson).from));
-  h.click(h.byId("academy-undo"));
+  h.click(h.byId("academy-reset"));
   assert.ok(
     !h
       .segment(academy.getAcademySolution(h.lesson).from)
@@ -571,11 +618,19 @@ test("Academy valid but wrong target explains mismatch without committing the wr
   assert.ok(h.success());
 });
 
-test("Academy forbidden card movement explains restriction and never completes the equation", () => {
+test("Academy forbidden equation sources remain locked without completing the equation", () => {
   const h = mount("academy-6-1"); // Only final 2 is editable; try first 2.
-  h.click(h.segment({ position: 0, segment: 5 }));
-  h.click(h.segment({ position: 0, segment: 3 }));
-  assert.equal(h.status(), academyCopy.en.feedback["not-allowed"]);
+  assert.ok(h.segment({ position: 0, segment: 5 }).props.disabled);
+  assert.ok(
+    !h
+      .nodes()
+      .some(
+        (node) =>
+          node.props?.["data-position"] === 0 &&
+          node.props?.className?.includes("placeholder") &&
+          !node.props.disabled,
+      ),
+  );
   assert.deepEqual(h.completed, []);
   clickSolution(h);
   assert.ok(h.success());
@@ -587,16 +642,22 @@ test("Academy hint levels reveal guidance without completing or moving a stick",
     h
       .nodes()
       .find((node) => node.type === "button" && node.props.children === text);
+  h.click(h.byId("academy-hint"));
   h.click(guidanceButton(academyCopy.en.hints[0]));
   const target = h.segment(academy.getAcademySolution(h.lesson).to);
   assert.ok(
     target.props.disabled,
     "outlined target still requires source selection",
   );
+  h.click(h.byId("academy-hint"));
   h.click(guidanceButton(academyCopy.en.hints[1]));
   assert.ok(
-    h.nodes().some((node) => node.props?.className === "academy-hint-card"),
+    !h
+      .nodes()
+      .some((node) => node.props?.["data-testid"] === "academy-assistance"),
   );
+  assert.equal(h.status(), h.lesson.hint.en);
+  h.click(h.byId("academy-hint"));
   h.click(guidanceButton(academyCopy.en.hints[2]));
   assert.ok(
     !h.nodes().some((node) => node.props?.className === "academy-hint-card"),
@@ -655,4 +716,405 @@ for (const phonePortrait of [false, true]) {
       assert.equal(source.element.captures.size, 0);
     });
   }
+}
+
+for (const language of ["en", "zh"]) {
+  test(`Academy compact six-to-four navigation keeps every lesson unlocked (${language})`, () => {
+    const h = mount("academy-1-1", { overviewOnly: true, language });
+    const chapters = () =>
+      h
+        .nodes()
+        .filter((node) => node.props?.["data-testid"] === "academy-chapter");
+    const lessons = () =>
+      h.nodes().filter((node) => node.props?.["data-lesson-id"]);
+    assert.equal(chapters().length, 6);
+    assert.equal(lessons().length, 0);
+    for (const chapter of academy.academyChapters) {
+      h.click(
+        chapters().find((node) => node.props["data-chapter-id"] === chapter.id),
+      );
+      assert.equal(chapters().length, 0);
+      assert.equal(lessons().length, 4);
+      for (const lesson of academy.academyLessons.filter(
+        (item) => item.chapterId === chapter.id,
+      )) {
+        h.click(
+          lessons().find((node) => node.props["data-lesson-id"] === lesson.id),
+        );
+        const view = h.nodes().find((node) => node.type === "lesson-proxy");
+        assert.equal(view.props.lesson.id, lesson.id);
+        h.click({ props: { onClick: view.props.onOverview } });
+        assert.equal(lessons().length, 4);
+      }
+      h.click(h.byId("academy-chapters-back"));
+      assert.equal(chapters().length, 6);
+    }
+    assert.deepEqual(h.completed, []);
+  });
+}
+
+test("Academy chapter boundary next and final skip navigate without inventing progress", () => {
+  const h = mount("academy-1-1", { overviewOnly: true });
+  const enter = (chapter, id) => {
+    h.click(
+      h.nodes().find((node) => node.props?.["data-chapter-id"] === chapter),
+    );
+    h.click(h.nodes().find((node) => node.props?.["data-lesson-id"] === id));
+  };
+  const next = () =>
+    h.click({
+      props: {
+        onClick: h.nodes().find((node) => node.type === "lesson-proxy").props
+          .onNext,
+      },
+    });
+  enter(3, "academy-3-4");
+  next();
+  assert.equal(
+    h.nodes().find((node) => node.type === "lesson-proxy").props.lesson.id,
+    "academy-4-1",
+  );
+  h.click({
+    props: {
+      onClick: h.nodes().find((node) => node.type === "lesson-proxy").props
+        .onOverview,
+    },
+  });
+  assert.ok(
+    h
+      .nodes()
+      .filter((node) => node.props?.["data-lesson-id"])
+      .every((node) => node.props["data-lesson-id"].startsWith("academy-4-")),
+  );
+  h.click(h.byId("academy-chapters-back"));
+  enter(6, "academy-6-4");
+  next();
+  assert.equal(
+    h.nodes().filter((node) => node.props?.["data-lesson-id"]).length,
+    4,
+  );
+  assert.deepEqual(h.completed, []);
+});
+
+test("Academy opening assistance cancels a captured drag and restores practice safely", () => {
+  const h = mount("academy-3-4");
+  const source = h.segment(academy.getAcademySolution(h.lesson).from);
+  startDrag(h, source);
+  h.click(h.byId("academy-hint"));
+  assert.equal(source.element.captures.size, 0);
+  assert.ok(!h.ghost());
+  assert.ok(h.byId("academy-assistance"));
+  assert.ok(
+    !h.nodes().some((node) => node.props?.["data-testid"] === "academy-board"),
+  );
+  h.click(h.byId("academy-hint-close"));
+  assert.ok(h.byId("academy-board"));
+  assert.deepEqual(h.completed, []);
+  clickSolution(h);
+  assert.ok(h.success());
+});
+
+for (const phonePortrait of [false, true]) {
+  for (const lesson of academy.academyLessons.filter(
+    (item) =>
+      item.mode !== "recognition" && academy.getAcademySolution(item)?.to,
+  )) {
+    test(`Academy ${lesson.id} snaps the ghost before release using target orientation (${phonePortrait ? "rotated" : "normal"})`, () => {
+      const h = mount(lesson.id, { phonePortrait });
+      const { from, to } = academy.getAcademySolution(lesson);
+      const source = from ? h.segment(from) : h.byId("academy-reservoir");
+      h.pointer(source, "Down", ...center(source));
+      assert.ok(
+        !h.ghost(),
+        "pending pointer does not show a ghost before threshold",
+      );
+      const target = h.segment(to);
+      const horizontal = target.props.className
+        .split(" ")
+        .includes("horizontal");
+      const expected = phonePortrait
+        ? horizontal
+          ? "vertical"
+          : "horizontal"
+        : horizontal
+          ? "horizontal"
+          : "vertical";
+      assert.equal(target.element.dataset.screenOrientation, expected);
+      // A distorted target box must not change its semantic screen orientation.
+      // This reproduces the operator-box failure without assuming correct CSS.
+      const originalRect = target.element.getBoundingClientRect();
+      target.element.getBoundingClientRect = () => ({
+        ...originalRect,
+        width: 40,
+        height: 40,
+        right: originalRect.left + 40,
+        bottom: originalRect.top + 40,
+      });
+      const [x, y] = center(target);
+      h.pointer(source, "Move", x, y);
+      assert.ok(
+        h.ghost().props.className.endsWith(expected),
+        "hover orientation is correct BEFORE release",
+      );
+      assert.equal(h.ghost().props.style.left, x);
+      assert.equal(h.ghost().props.style.top, y);
+      assert.ok(!h.success());
+      assert.deepEqual(h.completed, []);
+      h.pointer(source, "Up", x, y);
+      assert.ok(h.success());
+      assert.ok(!h.ghost());
+    });
+  }
+}
+
+for (const lesson of academy.academyLessons.filter(
+  (item) => item.mode !== "recognition",
+)) {
+  test(`Academy ${lesson.id} exposes exactly legal sources and selected-source outlines`, () => {
+    const legal = (from, to) =>
+      ["success", "wrong-target"].includes(
+        academy.validateAcademyMove(lesson, { from, to }).reason,
+      );
+    const empty = academy.getAcademyEmptySegments(lesson.initial);
+    const occupied = academy
+      .getAcademyVisibleSegments(lesson.initial)
+      .filter((point) => lesson.initial[point.position] !== "=");
+    const initial = mount(lesson.id);
+    for (const from of occupied) {
+      const allowed =
+        lesson.permitted.operation === "remove"
+          ? legal(from, null)
+          : empty.some((to) => legal(from, to));
+      assert.equal(
+        !initial.segment(from).props.disabled,
+        allowed,
+        `source ${JSON.stringify(from)}`,
+      );
+    }
+    const sources =
+      lesson.permitted.operation === "add"
+        ? [null]
+        : occupied.filter((from) =>
+            lesson.permitted.operation === "remove"
+              ? legal(from, null)
+              : empty.some((to) => legal(from, to)),
+          );
+    for (const from of sources) {
+      const h = mount(lesson.id);
+      h.click(from ? h.segment(from) : h.byId("academy-reservoir"));
+      const actual = h
+        .nodes()
+        .filter(
+          (node) =>
+            node.type === "button" &&
+            node.props.className?.split(" ").includes("placeholder"),
+        )
+        .map((node) => ({
+          position: node.props["data-position"],
+          segment: node.props["data-segment"],
+        }));
+      const expected = empty.filter((to) => legal(from, to));
+      assert.deepEqual(
+        actual,
+        expected,
+        `drop set for ${JSON.stringify(from)}`,
+      );
+      for (const to of actual)
+        assert.ok(!h.segment(to).props.disabled, "offered target is usable");
+      assert.ok(
+        !actual.some((point) => lesson.initial[point.position] === "="),
+        "equals is locked",
+      );
+      assert.deepEqual(h.completed, []);
+    }
+  });
+}
+
+for (const phonePortrait of [false, true]) {
+  for (const dragHand of ["left", "right"]) {
+    test(`Academy phone touch drops under the finger with a magnifier (${phonePortrait ? "rotated" : "normal"}, ${dragHand})`, () => {
+      const h = mount("academy-5-2", {
+        isPhone: true,
+        phonePortrait,
+        dragHand,
+      });
+      const { from, to } = academy.getAcademySolution(h.lesson);
+      const source = h.segment(from);
+      h.pointer(source, "Down", ...center(source));
+      assert.ok(!h.ghost());
+      assert.ok(!h.nodes().some((node) => node.type === "touch-magnifier"));
+      const target = h.segment(to);
+      const [x, y] = center(target);
+      h.pointer(source, "Move", x, y);
+      const lens = h.nodes().find((node) => node.type === "touch-magnifier");
+      assert.ok(lens);
+      assert.equal(lens.props.point.x, x);
+      assert.equal(lens.props.point.y, y);
+      assert.equal(lens.props.stick.x, x);
+      assert.equal(lens.props.stick.y, y);
+      assert.equal(
+        lens.props.stick.orientation,
+        phonePortrait ? "horizontal" : "vertical",
+      );
+      assert.equal(lens.props.stick.snapped, true);
+      assert.ok(!h.ghost(), "phone touch never shows the old offset helper");
+      h.pointer(source, "Up", x, y);
+      assert.ok(h.success());
+      assert.ok(!h.nodes().some((node) => node.type === "touch-magnifier"));
+      assert.equal(source.element.captures.size, 0);
+    });
+  }
+}
+
+for (const interruption of [
+  "pointercancel",
+  "lostcapture",
+  "blur",
+  "resize",
+  "orientationchange",
+  "visibilitychange",
+  "Escape",
+  "help",
+  "reset",
+]) {
+  test(`Academy phone magnifier clears on ${interruption}`, () => {
+    const h = mount("academy-5-2", { isPhone: true });
+    const source = h.segment(academy.getAcademySolution(h.lesson).from);
+    h.pointer(source, "Down", ...center(source));
+    h.pointer(source, "Move", 900, 900);
+    assert.ok(h.nodes().some((node) => node.type === "touch-magnifier"));
+    assert.ok(!h.ghost());
+    if (interruption === "pointercancel") h.pointer(source, "Cancel", 900, 900);
+    else if (interruption === "lostcapture") h.lostCapture();
+    else if (interruption === "visibilitychange")
+      h.emit(interruption, { hidden: true }, true);
+    else if (interruption === "Escape") h.emit("keydown", { key: "Escape" });
+    else if (interruption === "help") h.click(h.byId("academy-hint"));
+    else if (interruption === "reset") h.click(h.byId("academy-reset"));
+    else h.emit(interruption);
+    assert.ok(!h.nodes().some((node) => node.type === "touch-magnifier"));
+    assert.equal(source.element.captures.size, 0);
+    assert.deepEqual(h.completed, []);
+    if (interruption === "help") h.click(h.byId("academy-hint-close"));
+    clickSolution(h);
+    assert.ok(h.success());
+  });
+}
+
+for (const language of ["en", "zh"]) {
+  test(`Academy full 24-lesson handler journey persists completion and reopens (${language})`, () => {
+    const {
+      emptyAcademyProgress,
+      loadAcademy,
+      saveAcademy,
+    } = require("../.test-out/lib/academyStorage.js");
+    const values = new Map([
+      [
+        "imatchstick-pwa-stats",
+        JSON.stringify({ solved: 12, streak: 3, bypassed: 4 }),
+      ],
+    ]);
+    const storage = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+    };
+    let progress = { ...emptyAcademyProgress(), welcomed: true };
+    const props = {
+      fullFlow: true,
+      language,
+      completedLessonIds: progress.completedLessonIds,
+      onComplete(id) {
+        progress = {
+          ...progress,
+          completedLessonIds: [
+            ...new Set([...progress.completedLessonIds, id]),
+          ],
+        };
+        props.completedLessonIds = progress.completedLessonIds;
+        saveAcademy(storage, progress);
+      },
+    };
+    const h = mount("academy-1-1", props);
+    h.click(h.nodes().find((node) => node.props?.["data-chapter-id"] === 1));
+    h.click(
+      h
+        .nodes()
+        .find((node) => node.props?.["data-lesson-id"] === "academy-1-1"),
+    );
+    for (const lesson of academy.academyLessons) {
+      h.click(h.byId("academy-hint"));
+      assert.ok(h.byId("academy-assistance"));
+      h.click(h.byId("academy-hint-close"));
+      const solve = () => {
+        if (lesson.mode === "recognition")
+          h.click(
+            h
+              .nodes()
+              .find((node) => node.props?.["data-choice"] === lesson.target[0]),
+          );
+        else {
+          const { from, to } = academy.getAcademySolution(lesson);
+          h.click(from ? h.segment(from) : h.byId("academy-reservoir"));
+          h.click(to ? h.segment(to) : h.byId("academy-reservoir"));
+        }
+      };
+      if (lesson.mode === "recognition") {
+        h.click(
+          h
+            .nodes()
+            .find(
+              (node) =>
+                node.props?.["data-choice"] ===
+                lesson.choices.find((choice) => choice !== lesson.target[0]),
+            ),
+        );
+        assert.ok(!h.success());
+      }
+      solve();
+      assert.ok(h.success(), lesson.id);
+      h.click(h.byId("academy-reset"));
+      assert.ok(!h.success());
+      solve();
+      assert.equal(
+        progress.completedLessonIds.filter((id) => id === lesson.id).length,
+        1,
+      );
+      h.click(h.byId("academy-next"));
+    }
+    h.click(h.byId("academy-chapters-back"));
+    const intro = h
+      .nodes()
+      .find((node) => node.props?.className === "academy-intro");
+    assert.equal(
+      intro.props.children,
+      `${academyCopy[language].allDone} ${academyCopy[language].allDoneNote}`,
+    );
+    assert.equal(
+      h.nodes().find((node) => node.props?.role === "progressbar").props[
+        "aria-valuenow"
+      ],
+      24,
+    );
+    h.unmount();
+    const loaded = loadAcademy(
+      storage,
+      academy.academyLessons.map((lesson) => lesson.id),
+    );
+    assert.equal(loaded.showWelcome, false);
+    assert.equal(loaded.progress.completedLessonIds.length, 24);
+    const reopened = mount("academy-1-1", {
+      overviewOnly: true,
+      language,
+      completedLessonIds: loaded.progress.completedLessonIds,
+    });
+    assert.equal(
+      reopened.nodes().find((node) => node.props?.className === "academy-intro")
+        .props.children,
+      `${academyCopy[language].allDone} ${academyCopy[language].allDoneNote}`,
+    );
+    assert.equal(
+      values.get("imatchstick-pwa-stats"),
+      JSON.stringify({ solved: 12, streak: 3, bypassed: 4 }),
+    );
+  });
 }

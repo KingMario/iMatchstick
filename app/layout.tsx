@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./academy.css";
+import "./magnifier.css";
 
 export const metadata: Metadata = {
   title: "巧移火柴我最棒 | iMatchstick PWA",
