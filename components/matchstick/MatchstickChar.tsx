@@ -35,7 +35,7 @@ type MatchstickCharProps = {
   ) => void;
   onSegmentPointerMove: (event: PointerEvent<HTMLButtonElement>) => void;
   onSegmentPointerUp: (event: PointerEvent<HTMLButtonElement>) => void;
-  onSegmentPointerCancel: () => void;
+  onSegmentPointerCancel: (event: PointerEvent<HTMLButtonElement>) => void;
   labels: {
     equalsLabel: string;
     segmentLabel: string;

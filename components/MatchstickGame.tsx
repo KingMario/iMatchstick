@@ -38,9 +38,12 @@ import {
 } from "@/lib/academyStorage";
 import {
   type DragHand,
+  type DragPointerCapture,
   dragStartThreshold,
   resolveDragTarget,
   getPointerDragMetrics,
+  isDragPointer,
+  releaseDragPointerCapture,
   moveDragToPointer,
 } from "@/lib/drag";
 import {
@@ -93,38 +96,32 @@ type MessageKey =
   | "voicePermission"
   | "loadFailed";
 
-type DragState = {
-  from: SelectedSegment;
-  touchMagnifier: boolean;
-  pointerX: number;
-  pointerY: number;
-  originX: number;
-  originY: number;
-  offsetX: number;
-  offsetY: number;
-  helperSize: number;
-  x: number;
-  y: number;
-  orientation: "horizontal" | "vertical";
-  returning: boolean;
-  snapped?: boolean;
-  originOrientation: "horizontal" | "vertical";
-} | null;
+type DragState =
+  | (DragPointerCapture & {
+      from: SelectedSegment;
+      touchMagnifier: boolean;
+      pointerX: number;
+      pointerY: number;
+      originX: number;
+      originY: number;
+      offsetX: number;
+      offsetY: number;
+      helperSize: number;
+      x: number;
+      y: number;
+      orientation: "horizontal" | "vertical";
+      returning: boolean;
+      snapped?: boolean;
+      originOrientation: "horizontal" | "vertical";
+    })
+  | null;
 
-type PendingDrag = {
-  from: SelectedSegment;
-  startX: number;
-  startY: number;
-  touchMagnifier: boolean;
-  pointerX: number;
-  pointerY: number;
-  originX: number;
-  originY: number;
-  offsetX: number;
-  offsetY: number;
-  helperSize: number;
-  orientation: "horizontal" | "vertical";
-} | null;
+type PendingDrag =
+  | (NonNullable<DragState> & {
+      startX: number;
+      startY: number;
+    })
+  | null;
 
 const statsKey = "imatchstick-pwa-stats";
 const settingsKey = "imatchstick-pwa-settings";
@@ -174,9 +171,13 @@ export function MatchstickGame() {
   const [phonePortrait, setPhonePortrait] = useState(false);
   const suppressNextClick = useRef(false);
   const pendingDrag = useRef<PendingDrag>(null);
-  const [pendingSource, setPendingSource] = useState<SelectedSegment | null>(
-    null,
-  );
+  const [pendingPress, setPendingPress] = useState<PendingDrag>(null);
+  const pendingSource = pendingPress?.from ?? null;
+  const touchPreview = drag?.touchMagnifier
+    ? drag
+    : pendingPress?.touchMagnifier
+      ? pendingPress
+      : null;
   const puzzleRequestId = useRef(0);
   const dragRef = useRef<DragState>(null);
   const dragReturnTimer = useRef<number | null>(null);
@@ -191,6 +192,15 @@ export function MatchstickGame() {
 
   const answersFound = useMemo(() => solvedAnswers.length, [solvedAnswers]);
 
+  const clearDragGesture = useCallback(() => {
+    const current = dragRef.current ?? pendingDrag.current;
+    pendingDrag.current = null;
+    setPendingPress(null);
+    dragRef.current = null;
+    setDrag(null);
+    releaseDragPointerCapture(current);
+  }, []);
+
   const clearTouchDrag = useCallback(() => {
     if (
       !dragRef.current?.touchMagnifier &&
@@ -201,13 +211,10 @@ export function MatchstickGame() {
       window.clearTimeout(dragReturnTimer.current);
       dragReturnTimer.current = null;
     }
-    pendingDrag.current = null;
-    setPendingSource(null);
-    dragRef.current = null;
-    setDrag(null);
+    clearDragGesture();
     setSelected(null);
     suppressNextClick.current = true;
-  }, []);
+  }, [clearDragGesture]);
 
   // A touch lens must never survive an interrupted gesture or hidden page.
   useEffect(() => {
@@ -266,9 +273,7 @@ export function MatchstickGame() {
     }
 
     setSelected(null);
-    setDragState(null);
-    pendingDrag.current = null;
-    setPendingSource(null);
+    clearDragGesture();
     setSolved(false);
     setSolvedAnswers([]);
     setTimeLeft(60);
@@ -289,6 +294,10 @@ export function MatchstickGame() {
       }
       voiceSession.current?.cancel();
       voiceSession.current = null;
+      const current = dragRef.current ?? pendingDrag.current;
+      dragRef.current = null;
+      pendingDrag.current = null;
+      releaseDragPointerCapture(current);
     };
   }, []);
 
@@ -321,10 +330,7 @@ export function MatchstickGame() {
         viewport !== previousViewport &&
         (dragRef.current || pendingDrag.current)
       ) {
-        pendingDrag.current = null;
-        setPendingSource(null);
-        dragRef.current = null;
-        setDrag(null);
+        clearDragGesture();
         setSelected(null);
         setMessageKey("selectHint");
         suppressNextClick.current = true;
@@ -382,7 +388,7 @@ export function MatchstickGame() {
       document.documentElement.style.removeProperty("--game-viewport-width");
       document.documentElement.style.removeProperty("--game-viewport-height");
     };
-  }, []);
+  }, [clearDragGesture]);
 
   useEffect(() => {
     if (!mounted) {
@@ -461,9 +467,7 @@ export function MatchstickGame() {
     setStickDirections(createStickDirections(nextPuzzle.expression.length));
     setDisplayExpression(nextPuzzle.expression);
     setSelected(null);
-    setDragState(null);
-    pendingDrag.current = null;
-    setPendingSource(null);
+    clearDragGesture();
     setSolved(false);
     setSolvedAnswers([]);
     setTimeLeft(60);
@@ -484,9 +488,7 @@ export function MatchstickGame() {
     clearDragReturnTimer();
     setIsLoading(true);
     setSelected(null);
-    setDragState(null);
-    pendingDrag.current = null;
-    setPendingSource(null);
+    clearDragGesture();
     cancelVoice();
     const requestId = ++puzzleRequestId.current;
     void pickPuzzleFromBook(nextDifficulty, puzzle.expression).then(
@@ -519,9 +521,7 @@ export function MatchstickGame() {
     cancelVoice();
     setDisplayExpression(puzzle.expression);
     setSelected(null);
-    setDragState(null);
-    pendingDrag.current = null;
-    setPendingSource(null);
+    clearDragGesture();
     setSolved(false);
     setMessageKey("selectHint");
   }
@@ -545,9 +545,7 @@ export function MatchstickGame() {
 
     setDisplayExpression(nextExpression);
     setSelected(null);
-    setDragState(null);
-    pendingDrag.current = null;
-    setPendingSource(null);
+    clearDragGesture();
     setSolved(true);
     setSolvedAnswers((current) =>
       current.includes(nextExpression) ? current : [...current, nextExpression],
@@ -750,8 +748,14 @@ export function MatchstickGame() {
     visible: boolean,
     orientation: "horizontal" | "vertical",
   ) {
-    suppressNextClick.current = false;
-    if (interactionLocked || !visible) {
+    if (
+      interactionLocked ||
+      !visible ||
+      pendingDrag.current ||
+      (dragRef.current && !dragRef.current.returning) ||
+      event.isPrimary === false ||
+      (event.pointerType === "mouse" && event.button !== 0)
+    ) {
       return;
     }
 
@@ -761,7 +765,9 @@ export function MatchstickGame() {
       return;
     }
 
+    suppressNextClick.current = false;
     clearDragReturnTimer();
+    setDragState(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     const rect = event.currentTarget.getBoundingClientRect();
     const originX = rect.left + rect.width / 2;
@@ -773,9 +779,10 @@ export function MatchstickGame() {
       pointerType: event.pointerType,
       isPhone,
     });
-    setPendingSource(from);
-    pendingDrag.current = {
+    const pending: NonNullable<PendingDrag> = {
       from,
+      element: event.currentTarget,
+      pointerId: event.pointerId,
       touchMagnifier: helperMetrics.touchMagnifier,
       pointerX: event.clientX,
       pointerY: event.clientY,
@@ -787,7 +794,14 @@ export function MatchstickGame() {
       offsetY: helperMetrics.offsetY,
       helperSize: helperMetrics.helperSize,
       orientation,
+      originOrientation: orientation,
+      x: event.clientX,
+      y: event.clientY,
+      returning: false,
+      snapped: false,
     };
+    pendingDrag.current = pending;
+    setPendingPress(pending);
   }
 
   function snapOptions(from: SelectedSegment) {
@@ -805,12 +819,18 @@ export function MatchstickGame() {
 
     if (!currentDrag && pendingDrag.current) {
       const pending = pendingDrag.current;
+      if (!isDragPointer(pending, event)) return;
       const distance = Math.hypot(
         event.clientX - pending.startX,
         event.clientY - pending.startY,
       );
 
       if (distance < dragStartThreshold) {
+        if (pending.touchMagnifier) {
+          const next = moveDragToPointer(pending, event, false);
+          pendingDrag.current = next;
+          setPendingPress(next);
+        }
         return;
       }
 
@@ -819,22 +839,7 @@ export function MatchstickGame() {
       setMessageKey("selectedHint");
       setDragState(
         moveDragToPointer(
-          {
-            from: pending.from,
-            touchMagnifier: pending.touchMagnifier,
-            pointerX: event.clientX,
-            pointerY: event.clientY,
-            originX: pending.originX,
-            originY: pending.originY,
-            offsetX: pending.offsetX,
-            offsetY: pending.offsetY,
-            helperSize: pending.helperSize,
-            x: pending.originX,
-            y: pending.originY,
-            orientation: pending.orientation,
-            originOrientation: pending.orientation,
-            returning: false,
-          },
+          pending,
           event,
           false,
           true,
@@ -842,11 +847,15 @@ export function MatchstickGame() {
         ),
       );
       pendingDrag.current = null;
-      setPendingSource(null);
+      setPendingPress(null);
       return;
     }
 
-    if (!currentDrag) {
+    if (
+      !currentDrag ||
+      currentDrag.returning ||
+      !isDragPointer(currentDrag, event)
+    ) {
       return;
     }
 
@@ -866,15 +875,21 @@ export function MatchstickGame() {
     const currentDrag = dragRef.current;
 
     if (pendingDrag.current && !currentDrag) {
-      pendingDrag.current = null;
-      setPendingSource(null);
+      if (isDragPointer(pendingDrag.current, event)) clearDragGesture();
       return;
     }
 
-    if (!currentDrag) {
+    if (
+      !currentDrag ||
+      currentDrag.returning ||
+      !isDragPointer(currentDrag, event)
+    ) {
       return;
     }
 
+    // Retire the owner before releasing capture. The rest of this handler uses
+    // its snapshot, and only a threshold-crossed drag can submit a move.
+    clearDragGesture();
     const target = resolveDragTarget(
       event,
       currentDrag,
@@ -883,7 +898,7 @@ export function MatchstickGame() {
 
     if (!target?.dataset.position || !target.dataset.segment) {
       if (suppressNextClick.current) {
-        returnDraggedMatch(() => setSelected(null));
+        returnDraggedMatch(() => setSelected(null), currentDrag);
         return;
       }
 
@@ -904,19 +919,16 @@ export function MatchstickGame() {
     }
 
     setMessageKey("wrong");
-    returnDraggedMatch(() => setSelected(null));
+    returnDraggedMatch(() => setSelected(null), currentDrag);
   }
 
-  function handleSegmentPointerCancel() {
-    pendingDrag.current = null;
-    setPendingSource(null);
-
-    if (suppressNextClick.current) {
-      returnDraggedMatch(() => setSelected(null));
-      return;
-    }
-
-    setDragState(null);
+  function handleSegmentPointerCancel(event: PointerEvent<HTMLButtonElement>) {
+    const current = dragRef.current ?? pendingDrag.current;
+    if (!isDragPointer(current, event)) return;
+    const wasDragging = Boolean(dragRef.current);
+    clearDragGesture();
+    suppressNextClick.current = true;
+    if (wasDragging) returnDraggedMatch(() => setSelected(null), current);
   }
 
   function clearDragReturnTimer() {
@@ -926,9 +938,11 @@ export function MatchstickGame() {
     }
   }
 
-  function returnDraggedMatch(afterReturn?: () => void) {
+  function returnDraggedMatch(
+    afterReturn?: () => void,
+    current = dragRef.current,
+  ) {
     clearDragReturnTimer();
-    const current = dragRef.current;
     if (current?.touchMagnifier) {
       setDragState(null);
       afterReturn?.();
@@ -984,9 +998,7 @@ export function MatchstickGame() {
         : current,
     );
     clearDragReturnTimer();
-    pendingDrag.current = null;
-    setPendingSource(null);
-    setDragState(null);
+    clearDragGesture();
     setSelected(null);
     cancelVoice();
     setSettingsOpen(false);
@@ -1020,7 +1032,10 @@ export function MatchstickGame() {
 
   return (
     <main
-      onLostPointerCapture={clearTouchDrag}
+      onLostPointerCapture={(event) => {
+        if (isDragPointer(dragRef.current ?? pendingDrag.current, event))
+          clearTouchDrag();
+      }}
       className={[
         "app-shell",
         academyView !== null ? "academy-active" : "",
@@ -1276,23 +1291,27 @@ export function MatchstickGame() {
                   />
                 </div>
 
-                {drag?.touchMagnifier ? (
+                {touchPreview ? (
                   <TouchMagnifier
                     surface={equationRef.current}
-                    point={{ x: drag.pointerX, y: drag.pointerY }}
+                    point={{
+                      x: touchPreview.pointerX,
+                      y: touchPreview.pointerY,
+                    }}
                     rotatedClockwise={phonePortrait}
                     stick={{
-                      x: drag.x,
-                      y: drag.y,
-                      orientation: drag.orientation,
-                      snapped: Boolean(drag.snapped),
+                      x: touchPreview.x,
+                      y: touchPreview.y,
+                      orientation: touchPreview.orientation,
+                      snapped: Boolean(touchPreview.snapped),
                       reversed:
                         Boolean(
-                          stickDirections[drag.from.position]?.[
-                            drag.from.segment
+                          stickDirections[touchPreview.from.position]?.[
+                            touchPreview.from.segment
                           ],
                         ) !==
-                        (phonePortrait && drag.orientation === "vertical"),
+                        (phonePortrait &&
+                          touchPreview.orientation === "vertical"),
                     }}
                   />
                 ) : drag ? (

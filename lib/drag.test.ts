@@ -3,8 +3,65 @@ import { describe, it } from "node:test";
 import {
   getDragHelperMetrics,
   getDragHelperPoint,
+  isDragPointer,
   moveDragToPointer,
+  releaseDragPointerCapture,
 } from "./drag";
+
+describe("pointer gesture ownership", () => {
+  it("only accepts events from the captured pointer", () => {
+    const current = { pointerId: 7 };
+    assert.equal(isDragPointer(current, { pointerId: 7 }), true);
+    assert.equal(isDragPointer(current, { pointerId: 8 }), false);
+    assert.equal(isDragPointer(null, { pointerId: 7 }), false);
+  });
+
+  it("releases only the gesture's existing capture, once", () => {
+    const captured = new Set([7, 8]);
+    const released: number[] = [];
+    const current = {
+      pointerId: 7,
+      element: {
+        hasPointerCapture: (id: number) => captured.has(id),
+        releasePointerCapture: (id: number) => {
+          released.push(id);
+          captured.delete(id);
+        },
+      } as HTMLButtonElement,
+    };
+    releaseDragPointerCapture(current);
+    releaseDragPointerCapture(current);
+    releaseDragPointerCapture(null);
+    assert.deepEqual(released, [7]);
+    assert.equal(captured.has(8), true);
+  });
+
+  it("updates a pending phone preview without starting or snapping a drag", () => {
+    const pending = {
+      pointerId: 7,
+      offsetX: 0,
+      offsetY: 0,
+      startX: 100,
+      startY: 200,
+      active: false,
+      orientation: "vertical" as const,
+    };
+    const preview = moveDragToPointer(
+      pending,
+      { clientX: 103, clientY: 203 },
+      false,
+    );
+    assert.equal(preview.active, false);
+    assert.equal(preview.snapped, false);
+    assert.equal(preview.orientation, "vertical");
+    assert.equal(preview.startX, 100);
+    assert.equal(preview.startY, 200);
+    assert.equal(preview.x, 103);
+    assert.equal(preview.y, 203);
+    assert.equal(preview.pointerX, 103);
+    assert.equal(preview.pointerY, 203);
+  });
+});
 
 describe("screen-space drag preview", () => {
   it("places the left-hand preview below-right in portrait and above-right in landscape", () => {

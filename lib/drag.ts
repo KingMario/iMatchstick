@@ -12,6 +12,25 @@ const dragSnapPadding = 18;
 export const dragStartThreshold = 8;
 export type DragHand = "left" | "right";
 
+export type DragPointerCapture = {
+  pointerId: number;
+  element: HTMLButtonElement;
+};
+
+/** A second finger must not move, finish, or cancel the owning gesture. */
+export function isDragPointer(
+  current: Pick<DragPointerCapture, "pointerId"> | null,
+  event: { pointerId: number },
+) {
+  return current !== null && current.pointerId === event.pointerId;
+}
+
+/** Clear gesture refs before calling this: lostpointercapture may fire now. */
+export function releaseDragPointerCapture(current: DragPointerCapture | null) {
+  if (current?.element.hasPointerCapture(current.pointerId))
+    current.element.releasePointerCapture(current.pointerId);
+}
+
 export type SnapTarget = {
   element: HTMLElement;
   x: number;

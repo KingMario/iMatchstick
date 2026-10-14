@@ -17,6 +17,9 @@ import {
   dragStartThreshold,
   resolveDragTarget,
   getPointerDragMetrics,
+  isDragPointer,
+  moveDragToPointer,
+  releaseDragPointerCapture,
   type DragHand,
 } from "../../lib/drag";
 import { type SelectedSegment } from "../../lib/matchstick";
@@ -313,27 +316,22 @@ export function AcademyLessonView({
       to: { position, segment },
     });
 
-  function release(current: Drag | null) {
-    if (current?.element.hasPointerCapture(current.pointerId))
-      current.element.releasePointerCapture(current.pointerId);
-  }
   function clearDrag() {
     const current = dragRef.current;
     dragRef.current = null;
-    release(current);
+    releaseDragPointerCapture(current);
     setDrag(null);
   }
   useEffect(() => {
     const releaseCapture = () => {
       const current = dragRef.current;
       dragRef.current = null;
-      if (current?.element.hasPointerCapture(current.pointerId))
-        current.element.releasePointerCapture(current.pointerId);
+      releaseDragPointerCapture(current);
     };
     const interrupt = () => {
       if (!dragRef.current) return;
       releaseCapture();
-      suppressClick.current = false;
+      suppressClick.current = true;
       setDrag(null);
       setSelected(null);
       setFeedback("cancelled");
@@ -423,14 +421,15 @@ export function AcademyLessonView({
     from: SelectedSegment | null,
     orientation: "horizontal" | "vertical",
   ) {
-    suppressClick.current = false;
     if (
       dragRef.current ||
+      event.isPrimary === false ||
       !interactive ||
       (from ? !canSelectAcademySource(lesson, from) : lesson.mode !== "add") ||
       (event.pointerType === "mouse" && event.button !== 0)
     )
       return;
+    suppressClick.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     const artwork =
       from === null
@@ -480,15 +479,21 @@ export function AcademyLessonView({
 
   function pointerMove(event: PointerEvent<HTMLButtonElement>) {
     const current = dragRef.current;
-    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current || !isDragPointer(current, event)) return;
     if (
       !current.active &&
       Math.hypot(
         event.clientX - current.startX,
         event.clientY - current.startY,
       ) < dragStartThreshold
-    )
+    ) {
+      if (current.touchMagnifier) {
+        const next = moveDragToPointer(current, event, false);
+        dragRef.current = next;
+        setDrag(next);
+      }
       return;
+    }
     event.preventDefault();
     suppressClick.current = true;
     if (!current.active) select(current.from ?? "reservoir");
@@ -512,7 +517,7 @@ export function AcademyLessonView({
   }
   function pointerUp(event: PointerEvent<HTMLButtonElement>) {
     const current = dragRef.current;
-    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current || !isDragPointer(current, event)) return;
     if (!current.active) {
       clearDrag();
       return;
@@ -551,6 +556,9 @@ export function AcademyLessonView({
     setSelected(null);
     setFeedback("cancelled");
   }
+  function pointerCancel(event: PointerEvent<HTMLButtonElement>) {
+    if (isDragPointer(dragRef.current, event)) cancel();
+  }
   function choose(value: string) {
     const result = validateAcademyRecognition(lesson, value);
     setChoice(value);
@@ -585,7 +593,7 @@ export function AcademyLessonView({
         );
       }}
       onLostPointerCapture={(event) => {
-        if (dragRef.current?.pointerId === event.pointerId) cancel();
+        if (isDragPointer(dragRef.current, event)) cancel();
       }}
     >
       <div className="academy-lesson-top">
@@ -718,7 +726,7 @@ export function AcademyLessonView({
                   }}
                   onSegmentPointerMove={pointerMove}
                   onSegmentPointerUp={pointerUp}
-                  onSegmentPointerCancel={cancel}
+                  onSegmentPointerCancel={pointerCancel}
                   labels={{
                     equalsLabel: text.equals,
                     segmentLabel: `${text.character} ${position + 1}, ${text.segment}`,
@@ -756,7 +764,7 @@ export function AcademyLessonView({
               }}
               onPointerMove={pointerMove}
               onPointerUp={pointerUp}
-              onPointerCancel={cancel}
+              onPointerCancel={pointerCancel}
             >
               {(lesson.mode === "add" && !solved) ||
               (lesson.mode === "remove" && solved) ? (
@@ -840,7 +848,7 @@ export function AcademyLessonView({
           {solved ? text.next : text.skip} →
         </button>
       </div>
-      {drag?.active && drag.touchMagnifier && (
+      {drag?.touchMagnifier && (
         <TouchMagnifier
           surface={boardRef.current}
           point={{ x: drag.pointerX, y: drag.pointerY }}

@@ -352,6 +352,7 @@ function mount(id, overrides = {}) {
         ? children.filter((child) => typeof child === "string").join("")
         : children;
     },
+    lens: () => nodes().find((node) => node.type === "touch-magnifier"),
     success: () =>
       nodes().some((node) => node.props?.["data-testid"] === "academy-success"),
     ghost: () =>
@@ -942,7 +943,8 @@ for (const phonePortrait of [false, true]) {
       const source = h.segment(from);
       h.pointer(source, "Down", ...center(source));
       assert.ok(!h.ghost());
-      assert.ok(!h.nodes().some((node) => node.type === "touch-magnifier"));
+      assert.ok(h.lens(), "phone touch renders its lens on pointerdown");
+      assert.equal(h.lens().props.stick.snapped, false);
       const target = h.segment(to);
       const [x, y] = center(target);
       h.pointer(source, "Move", x, y);
@@ -966,38 +968,238 @@ for (const phonePortrait of [false, true]) {
   }
 }
 
-for (const interruption of [
-  "pointercancel",
-  "lostcapture",
-  "blur",
-  "resize",
-  "orientationchange",
-  "visibilitychange",
-  "Escape",
-  "help",
-  "reset",
-]) {
-  test(`Academy phone magnifier clears on ${interruption}`, () => {
-    const h = mount("academy-5-2", { isPhone: true });
-    const source = h.segment(academy.getAcademySolution(h.lesson).from);
-    h.pointer(source, "Down", ...center(source));
-    h.pointer(source, "Move", 900, 900);
-    assert.ok(h.nodes().some((node) => node.type === "touch-magnifier"));
-    assert.ok(!h.ghost());
-    if (interruption === "pointercancel") h.pointer(source, "Cancel", 900, 900);
-    else if (interruption === "lostcapture") h.lostCapture();
-    else if (interruption === "visibilitychange")
-      h.emit(interruption, { hidden: true }, true);
-    else if (interruption === "Escape") h.emit("keydown", { key: "Escape" });
-    else if (interruption === "help") h.click(h.byId("academy-hint"));
-    else if (interruption === "reset") h.click(h.byId("academy-reset"));
-    else h.emit(interruption);
-    assert.ok(!h.nodes().some((node) => node.type === "touch-magnifier"));
-    assert.equal(source.element.captures.size, 0);
+for (const id of ["academy-5-2", "academy-2-1"])
+  for (const mode of ["pending", "active"])
+    for (const interruption of [
+      "pointercancel",
+      "lostcapture",
+      "blur",
+      "resize",
+      "orientationchange",
+      "visibilitychange",
+      "Escape",
+      "help",
+      "reset",
+    ]) {
+      test(`Academy ${id} ${mode} phone magnifier clears on ${interruption}`, () => {
+        const h = mount(id, { isPhone: true });
+        const { from } = academy.getAcademySolution(h.lesson);
+        const source = from ? h.segment(from) : h.byId("academy-reservoir");
+        const initial = h.visibleSegments();
+        h.pointer(source, "Down", ...center(source));
+        if (mode === "active") h.pointer(source, "Move", 900, 900);
+        assert.ok(
+          h.lens(),
+          "pending and active phone gestures both show a lens",
+        );
+        assert.ok(!h.ghost());
+        if (interruption === "pointercancel")
+          h.pointer(source, "Cancel", 900, 900);
+        else if (interruption === "lostcapture") h.lostCapture();
+        else if (interruption === "visibilitychange")
+          h.emit(interruption, { hidden: true }, true);
+        else if (interruption === "Escape")
+          h.emit("keydown", { key: "Escape" });
+        else if (interruption === "help") h.click(h.byId("academy-hint"));
+        else if (interruption === "reset") h.click(h.byId("academy-reset"));
+        else h.emit(interruption);
+        assert.ok(!h.lens());
+        assert.equal(source.element.captures.size, 0);
+        assert.deepEqual(h.completed, []);
+        // Stale captured handlers cannot restore an interrupted pending lens.
+        h.pointer(source, "Move", 900, 900);
+        h.pointer(source, "Up", 900, 900);
+        assert.ok(!h.lens());
+        assert.ok(!h.ghost());
+        if (interruption === "help") h.click(h.byId("academy-hint-close"));
+        assert.deepEqual(h.visibleSegments(), initial);
+        clickSolution(h);
+        assert.ok(h.success());
+      });
+    }
+
+for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"])
+  for (const phonePortrait of [false, true])
+    for (const belowThreshold of [false, true]) {
+      test(`Academy ${id} touch press preserves two-tap solving (${phonePortrait}, small motion: ${belowThreshold})`, () => {
+        const h = mount(id, { isPhone: true, phonePortrait });
+        const { from, to } = academy.getAcademySolution(h.lesson);
+        const source = () =>
+          from ? h.segment(from) : h.byId("academy-reservoir");
+        const initial = h.visibleSegments();
+        const [x, y] = center(source());
+        h.pointer(source(), "Down", x, y);
+        assert.ok(h.lens(), "lens appears before any movement");
+        assert.equal(h.lens().props.point.x, x);
+        assert.equal(h.lens().props.point.y, y);
+        assert.equal(h.lens().props.stick.x, x);
+        assert.equal(h.lens().props.stick.y, y);
+        assert.equal(h.lens().props.stick.snapped, false);
+        assert.equal(
+          h.lens().props.stick.orientation,
+          from
+            ? source().props["data-screen-orientation"]
+            : phonePortrait
+              ? "vertical"
+              : "horizontal",
+        );
+        assert.ok(!source().props.className.split(" ").includes("selected"));
+        assert.deepEqual(h.visibleSegments(), initial);
+        assert.deepEqual(h.completed, []);
+        assert.ok(!h.ghost());
+        if (belowThreshold) {
+          h.pointer(source(), "Move", x + 2, y + 2);
+          assert.equal(h.lens().props.point.x, x + 2);
+          assert.equal(h.lens().props.point.y, y + 2);
+          assert.equal(h.lens().props.stick.snapped, false);
+          assert.ok(!source().props.className.split(" ").includes("selected"));
+          assert.deepEqual(h.visibleSegments(), initial);
+          assert.deepEqual(h.completed, []);
+        }
+        h.pointer(source(), "Up", x, y);
+        assert.ok(!h.lens());
+        assert.equal(source().element.captures.size, 0);
+        assert.deepEqual(h.visibleSegments(), initial);
+        h.click(source(), 1); // The pointer's normal native click is still allowed.
+        assert.ok(source().props.className.split(" ").includes("selected"));
+        assert.ok(!h.success());
+
+        const target = () => (to ? h.segment(to) : h.byId("academy-reservoir"));
+        h.pointer(target(), "Down", ...center(target()));
+        assert.ok(
+          !h.lens(),
+          "a destination tap does not create a draggable source",
+        );
+        h.pointer(target(), "Up", ...center(target()));
+        h.click(target(), 1);
+        assert.ok(h.success());
+        assert.deepEqual(h.completed, [id]);
+        assert.ok(!h.lens());
+      });
+    }
+
+for (const id of ["academy-5-2", "academy-2-1"])
+  for (const mode of ["pending", "active"]) {
+    test(`Academy ${id} ${mode} phone touch ignores secondary pointer phases`, () => {
+      const h = mount(id, { isPhone: true });
+      const { from, to } = academy.getAcademySolution(h.lesson);
+      const source = from ? h.segment(from) : h.byId("academy-reservoir");
+      const initial = h.visibleSegments();
+      h.pointer(source, "Down", ...center(source));
+      if (mode === "active") h.pointer(source, "Move", 900, 900);
+      const point = { ...h.lens().props.point };
+      const stick = { ...h.lens().props.stick };
+      for (const phase of ["Down", "Move", "Up", "Cancel"]) {
+        h.pointer(source, phase, 1000, 1200, 99);
+        assert.ok(h.lens(), `secondary ${phase} must not dismiss the lens`);
+        assert.deepEqual({ ...h.lens().props.point }, point);
+        assert.deepEqual({ ...h.lens().props.stick }, stick);
+        assert.ok(source.element.captures.has(7));
+        assert.ok(!source.element.captures.has(99));
+        assert.deepEqual(h.visibleSegments(), initial);
+        assert.deepEqual(h.completed, []);
+      }
+      h.lostCapture(99);
+      assert.ok(h.lens(), "secondary lostcapture must not dismiss the lens");
+      assert.deepEqual({ ...h.lens().props.point }, point);
+      const target = h.segment(to);
+      h.pointer(source, "Move", ...center(target));
+      h.pointer(source, "Up", ...center(target));
+      assert.ok(h.success(), "the original pointer still owns the move");
+      assert.ok(!h.lens());
+      assert.equal(source.element.captures.size, 0);
+    });
+
+    test(`Academy ${id} ${mode} phone touch release outside does not commit`, () => {
+      const h = mount(id, { isPhone: true });
+      const { from } = academy.getAcademySolution(h.lesson);
+      const source = from ? h.segment(from) : h.byId("academy-reservoir");
+      const initial = h.visibleSegments();
+      h.pointer(source, "Down", ...center(source));
+      if (mode === "active") h.pointer(source, "Move", 900, 900);
+      h.pointer(source, "Up", -1000, -1000);
+      assert.ok(!h.lens());
+      assert.ok(!h.ghost());
+      assert.equal(source.element.captures.size, 0);
+      assert.deepEqual(h.visibleSegments(), initial);
+      assert.deepEqual(h.completed, []);
+      clickSolution(h);
+      assert.ok(h.success());
+    });
+
+    test(`Academy ${id} ${mode} touch unmount releases the press capture`, () => {
+      const h = mount(id, { isPhone: true });
+      const { from } = academy.getAcademySolution(h.lesson);
+      const source = from ? h.segment(from) : h.byId("academy-reservoir");
+      h.pointer(source, "Down", ...center(source));
+      if (mode === "active") h.pointer(source, "Move", 900, 900);
+      assert.ok(h.lens());
+      h.unmount();
+      assert.equal(source.element.captures.size, 0);
+      assert.equal(h.listenerCount(), 0);
+    });
+  }
+
+test("Academy phone mouse press has no lens and keeps the threshold helper", () => {
+  const h = mount("academy-5-2", { isPhone: true });
+  const source = h.segment(academy.getAcademySolution(h.lesson).from);
+  const [x, y] = center(source);
+  const mouse = { pointerType: "mouse" };
+  h.pointer(source, "Down", x, y, 7, mouse);
+  assert.ok(!h.lens());
+  assert.ok(!h.ghost());
+  h.pointer(source, "Move", x + 2, y + 2, 7, mouse);
+  assert.ok(!h.lens());
+  assert.ok(!h.ghost());
+  h.pointer(source, "Move", 900, 900, 7, mouse);
+  assert.ok(!h.lens());
+  assert.ok(h.ghost());
+  h.pointer(source, "Cancel", 900, 900, 7, mouse);
+  assert.ok(!h.ghost());
+});
+
+for (const id of ["academy-5-2", "academy-2-1", "academy-2-2"]) {
+  test(`Academy ${id} repeat touch tap deselects exactly once after the press lens closes`, () => {
+    const h = mount(id, { isPhone: true });
+    const { from } = academy.getAcademySolution(h.lesson);
+    const source = () => (from ? h.segment(from) : h.byId("academy-reservoir"));
+    h.click(source());
+    assert.ok(source().props.className.split(" ").includes("selected"));
+    h.pointer(source(), "Down", ...center(source()));
+    assert.ok(h.lens());
+    assert.ok(
+      source().props.className.split(" ").includes("selected"),
+      "press preserves prior selection",
+    );
+    h.pointer(source(), "Up", ...center(source()));
+    assert.ok(!h.lens());
+    assert.ok(
+      source().props.className.split(" ").includes("selected"),
+      "release is not a synthetic selection change",
+    );
+    h.click(source(), 1);
+    assert.ok(
+      !source().props.className.split(" ").includes("selected"),
+      "normal click toggles selection exactly once",
+    );
     assert.deepEqual(h.completed, []);
-    if (interruption === "help") h.click(h.byId("academy-hint-close"));
     clickSolution(h);
     assert.ok(h.success());
+  });
+
+  test(`Academy ${id} release over its legal destination without motion never commits`, () => {
+    const h = mount(id, { isPhone: true });
+    const { from, to } = academy.getAcademySolution(h.lesson);
+    const initial = h.visibleSegments();
+    const source = from ? h.segment(from) : h.byId("academy-reservoir");
+    h.pointer(source, "Down", ...center(source));
+    const target = to ? h.segment(to) : h.byId("academy-reservoir");
+    h.pointer(source, "Up", ...center(target));
+    assert.ok(!h.lens());
+    assert.equal(source.element.captures.size, 0);
+    assert.deepEqual(h.visibleSegments(), initial);
+    assert.deepEqual(h.completed, []);
+    assert.ok(!h.success());
   });
 }
 

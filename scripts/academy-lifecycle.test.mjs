@@ -16,9 +16,16 @@ test("academy entry and exit do not reset puzzle, answers, clock or competitive 
     handlers,
     /\b(?:resetPuzzle|setPuzzle|setDisplayExpression|setTimeLeft|setStats|setSolved|setSolvedAnswers|loadNextPuzzle)\s*\(/,
   );
-  assert.match(handlers, /pendingDrag\.current = null/);
+  assert.match(handlers, /clearDragGesture\(\)/);
+  const cleanup = game.slice(
+    game.indexOf("  const clearDragGesture ="),
+    game.indexOf("  const clearTouchDrag ="),
+  );
+  assert.match(cleanup, /pendingDrag\.current = null/);
+  assert.match(cleanup, /setPendingPress\(null\)/);
+  assert.match(cleanup, /setDrag\(null\)/);
+  assert.match(cleanup, /releaseDragPointerCapture\(current\)/);
   assert.match(handlers, /clearDragReturnTimer\(\)/);
-  assert.match(handlers, /setDragState\(null\)/);
   assert.match(handlers, /setSettingsOpen\(false\)/);
   assert.match(handlers, /setAcademyView\("lessons"\)/);
   assert.match(handlers, /setAcademyView\(null\)/);

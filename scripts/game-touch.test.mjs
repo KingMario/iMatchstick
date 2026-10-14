@@ -106,8 +106,20 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
       if (!elements.has(id))
         elements.set(id, {
           captures: new Set(),
+          releases: 0,
           setPointerCapture(id) {
             this.captures.add(id);
+          },
+          hasPointerCapture(id) {
+            return this.captures.has(id);
+          },
+          releasePointerCapture(id) {
+            assert.ok(this.captures.has(id), "release only an owned capture");
+            this.captures.delete(id);
+            this.releases++;
+            // Native release bubbles lostpointercapture. The owner must be
+            // cleared before this callback so a successful move survives it.
+            tree?.props.onLostPointerCapture?.({ pointerId: id });
           },
           getBoundingClientRect() {
             const vertical =
@@ -307,13 +319,14 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
     const r = node.element.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   };
-  function pointer(node, phase, point, pointerType = "touch") {
+  function pointer(node, phase, point, pointerType = "touch", pointerId = 7) {
     assert.ok(!node.props.disabled, "gesture starts on an actionable segment");
     node.props[`onPointer${phase}`]({
       clientX: point.x,
       clientY: point.y,
       pointerType,
-      pointerId: 7,
+      pointerId,
+      button: 0,
       currentTarget: node.element,
       preventDefault() {},
     });
@@ -330,6 +343,8 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
     segment,
     center,
     pointer,
+    click: (node) => act(() => node.props.onClick()),
+    phone,
     act,
     viewport,
     window,
@@ -360,7 +375,12 @@ function mount({ portrait = true, hand = "right", phone = true } = {}) {
 function begin(game, from = [4, 3], pointerType = "touch") {
   const source = game.segment(...from);
   game.pointer(source, "Down", game.center(source), pointerType);
-  assert.ok(!game.lens(), "no lens before drag threshold");
+  assert.equal(
+    Boolean(game.lens()),
+    game.phone && pointerType === "touch",
+    "phone touch reveals its lens on pointerdown before drag threshold",
+  );
+  assert.ok(!game.ghost(), "pointerdown never starts the conventional helper");
   return game.segment(...from);
 }
 function drag(game, from = [4, 3], to = [4, 5], pointerType = "touch") {
@@ -444,9 +464,13 @@ for (const mode of ["active", "pending"])
       if (interruption === "timeout")
         g.act(() => g.byType("GameSettings").props.onTimerChange(true));
       const source = mode === "active" ? drag(g).source : begin(g);
-      if (mode === "active") assert.ok(g.lens());
+      assert.ok(g.lens(), "both pending and active phone gestures show a lens");
       const actions = {
-        cancel: () => source.props.onPointerCancel(),
+        cancel: () =>
+          source.props.onPointerCancel({
+            pointerId: 7,
+            currentTarget: source.element,
+          }),
         "lost capture": () =>
           g.root().props.onLostPointerCapture({ pointerId: 7 }),
         viewport: () => {
@@ -473,9 +497,26 @@ for (const mode of ["active", "pending"])
       else g.act(actions[interruption]);
       assert.ok(!g.lens());
       assert.ok(!g.ghost());
+      assert.equal(
+        source.element.captures.size,
+        0,
+        "interruption releases capture",
+      );
       // Stale captured move/up callbacks must not recreate a cleared gesture.
-      g.act(() => source.props.onPointerMove({ clientX: 2500, clientY: 1500 }));
-      g.act(() => source.props.onPointerUp({ clientX: 2500, clientY: 1500 }));
+      g.act(() =>
+        source.props.onPointerMove({
+          pointerId: 7,
+          clientX: 2500,
+          clientY: 1500,
+        }),
+      );
+      g.act(() =>
+        source.props.onPointerUp({
+          pointerId: 7,
+          clientX: 2500,
+          clientY: 1500,
+        }),
+      );
       assert.ok(!g.lens());
       assert.ok(!g.ghost());
       if (interruption === "new puzzle") {
@@ -533,12 +574,22 @@ for (const portrait of [false, true]) {
     const source = begin(g),
       point = g.center(source);
     g.pointer(source, "Move", { x: point.x + 3, y: point.y + 3 });
-    assert.ok(!g.lens());
+    assert.ok(g.lens(), "small motion keeps the touch-press lens visible");
+    assert.equal(g.lens().props.point.x, point.x + 3);
+    assert.equal(g.lens().props.point.y, point.y + 3);
+    assert.equal(g.lens().props.stick.snapped, false);
     assert.ok(!g.ghost());
+    assert.ok(!g.segment(4, 3).props.className.split(" ").includes("selected"));
+    assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=3"));
     g.pointer(g.segment(4, 3), "Up", point);
+    assert.equal(source.element.captures.size, 0);
     g.pointer(g.segment(4, 3), "Move", { x: 2500, y: 1500 });
     assert.ok(!g.lens());
     assert.ok(!g.ghost());
+    g.click(g.segment(4, 3));
+    assert.ok(g.segment(4, 3).props.className.split(" ").includes("selected"));
+    g.click(g.segment(4, 5));
+    assert.equal(g.byType("GameControls").props.solved, true);
   });
   test(`main mouse offset target preview and release agree: ${portrait}`, () => {
     const g = mount({ portrait });
@@ -569,3 +620,126 @@ for (const portrait of [false, true]) {
     assert.equal(g.byType("GameControls").props.solved, true);
   });
 }
+
+for (const portrait of [false, true])
+  for (const hand of ["left", "right"]) {
+    test(`main touch press magnifies immediately, then ordinary two-tap solving works: ${portrait}/${hand}`, () => {
+      const g = mount({ portrait, hand });
+      const source = g.segment(4, 3);
+      const centerPoint = g.center(source);
+      const point = { x: centerPoint.x + 2, y: centerPoint.y + 2 };
+      g.pointer(source, "Down", point);
+      const lens = g.lens();
+      assert.ok(lens, "no pointermove is needed to render the lens");
+      assert.equal(lens.props.point.x, point.x);
+      assert.equal(lens.props.point.y, point.y);
+      assert.equal(lens.props.stick.x, point.x);
+      assert.equal(lens.props.stick.y, point.y);
+      assert.equal(lens.props.stick.snapped, false);
+      assert.equal(
+        lens.props.stick.orientation,
+        source.props["data-screen-orientation"],
+      );
+      assert.ok(!g.ghost());
+      assert.ok(
+        !g.segment(4, 3).props.className.split(" ").includes("selected"),
+      );
+      assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=3"));
+      assert.equal(g.byType("GameControls").props.solved, false);
+      assert.ok(source.element.captures.has(7));
+
+      g.pointer(g.segment(4, 3), "Up", point);
+      assert.ok(!g.lens());
+      assert.ok(!g.ghost());
+      assert.equal(source.element.captures.size, 0);
+      g.click(g.segment(4, 3)); // Native click generated after the touch release.
+      assert.ok(
+        g.segment(4, 3).props.className.split(" ").includes("selected"),
+      );
+      assert.equal(g.byType("GameControls").props.solved, false);
+
+      const target = g.segment(4, 5);
+      g.pointer(target, "Down", g.center(target));
+      assert.ok(
+        !g.lens(),
+        "an empty destination is not a new draggable source",
+      );
+      g.pointer(g.segment(4, 5), "Up", g.center(target));
+      g.click(g.segment(4, 5));
+      assert.equal(g.byType("GameControls").props.solved, true);
+      assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=2"));
+      assert.ok(!g.lens());
+    });
+  }
+
+for (const mode of ["pending", "active"]) {
+  test(`main ${mode} phone touch ignores every secondary pointer phase`, () => {
+    const g = mount();
+    const source = mode === "active" ? drag(g).source : begin(g);
+    const point = { ...g.lens().props.point };
+    const stick = { ...g.lens().props.stick };
+    const secondary = g.segment(0, 1);
+    const foreignPoint = { x: 2500, y: 1500 };
+    for (const phase of ["Down", "Move", "Up", "Cancel"]) {
+      g.pointer(secondary, phase, foreignPoint, "touch", 99);
+      assert.ok(
+        g.lens(),
+        `${phase} from another pointer cannot dismiss the lens`,
+      );
+      assert.deepEqual({ ...g.lens().props.point }, point);
+      assert.deepEqual({ ...g.lens().props.stick }, stick);
+      assert.ok(source.element.captures.has(7));
+      assert.ok(!secondary.element.captures.has(99));
+      assert.equal(g.byType("GameControls").props.solved, false);
+    }
+    g.act(() => g.root().props.onLostPointerCapture({ pointerId: 99 }));
+    assert.ok(g.lens(), "foreign lostcapture cannot dismiss the primary lens");
+    assert.deepEqual({ ...g.lens().props.point }, point);
+    const target = g.segment(4, 5);
+    g.pointer(g.segment(4, 3), "Move", g.center(target));
+    g.pointer(g.segment(4, 3), "Up", g.center(target));
+    assert.equal(g.byType("GameControls").props.solved, true);
+    assert.ok(!g.lens());
+    assert.equal(source.element.captures.size, 0);
+  });
+
+  test(`main ${mode} phone touch release outside clears without moving a match`, () => {
+    const g = mount();
+    const source = mode === "active" ? drag(g).source : begin(g);
+    g.pointer(source, "Up", { x: -1000, y: -1000 });
+    assert.ok(!g.lens());
+    assert.ok(!g.ghost());
+    assert.equal(source.element.captures.size, 0);
+    assert.equal(g.byType("GameControls").props.solved, false);
+    assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=3"));
+    assert.equal(g.timers.size, 0);
+  });
+}
+
+test("main touch press released over a legal target without moving never commits", () => {
+  const g = mount();
+  const source = begin(g);
+  const target = g.segment(4, 5);
+  g.pointer(source, "Up", g.center(target));
+  assert.ok(!g.lens());
+  assert.equal(source.element.captures.size, 0);
+  assert.equal(g.byType("GameControls").props.solved, false);
+  assert.ok(g.nodes().some((n) => n.props?.["aria-label"] === "7-5=3"));
+  assert.ok(!g.segment(4, 3).props.className.split(" ").includes("selected"));
+});
+
+test("main desktop mouse press and small movement retain ordinary tap selection", () => {
+  const g = mount({ phone: false });
+  const source = begin(g, [4, 3], "mouse");
+  const point = g.center(source);
+  g.pointer(source, "Move", { x: point.x + 2, y: point.y + 2 }, "mouse");
+  assert.ok(!g.lens());
+  assert.ok(!g.ghost());
+  assert.ok(!g.segment(4, 3).props.className.split(" ").includes("selected"));
+  g.pointer(g.segment(4, 3), "Up", point, "mouse");
+  assert.equal(source.element.captures.size, 0);
+  g.click(g.segment(4, 3));
+  assert.ok(g.segment(4, 3).props.className.split(" ").includes("selected"));
+  g.click(g.segment(4, 5));
+  assert.equal(g.byType("GameControls").props.solved, true);
+});
