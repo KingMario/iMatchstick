@@ -15,7 +15,7 @@ import { MatchstickArt } from "./MatchstickArt";
 
 export type TouchMagnifierProps = {
   surface: HTMLElement | null;
-  /** Rendered title/header, independent of the finger and the sampled board. */
+  /** Rendered title/header supplying the held logical height for this press. */
   anchor: HTMLElement | null;
   /** Raw finger coordinates; never replace these with a snapped target. */
   point: MagnifierPoint;
@@ -127,8 +127,8 @@ export function TouchMagnifier({
   const [anchorRect, setAnchorRect] = useState<MagnifierRect | null>(null);
   const [revision, setRevision] = useState(0);
   useLayoutEffect(() => {
-    // One title-area position for this hold, even if a voice caption expires or
-    // status copy reflows. The persistent anchor is independent of the finger.
+    // Snapshot the title-area height for this hold, even if a voice caption
+    // expires or status copy reflows. Horizontal placement follows the finger.
     setAnchorRect(anchor?.getBoundingClientRect() ?? null);
     const measure = () => {
       const view = window.visualViewport;
@@ -162,7 +162,9 @@ export function TouchMagnifier({
   }, [anchor]);
 
   const placement =
-    viewport && anchorRect ? getMagnifierPlacement(anchorRect, viewport) : null;
+    viewport && anchorRect
+      ? getMagnifierPlacement(anchorRect, viewport, point, rotatedClockwise)
+      : null;
   const ready = Boolean(placement && surface);
   useLayoutEffect(() => {
     const container = scene.current;

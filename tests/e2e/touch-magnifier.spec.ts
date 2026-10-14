@@ -50,7 +50,7 @@ function nodes(page: Page, mode: Mode) {
 for (const viewport of views)
   for (const hand of ["left", "right"])
     for (const mode of ["game", "academy"] as const) {
-      test(`phone touch parks the real board lens at the title and drops at the finger ${mode} ${hand} ${viewport.width}`, async ({
+      test(`phone touch lens follows horizontally at title height and drops at the finger ${mode} ${hand} ${viewport.width}`, async ({
         page,
         context,
       }) => {
@@ -76,28 +76,22 @@ for (const viewport of views)
             "hidden",
           );
           const pressedBounds = (await lens.boundingBox())!;
-          // Chromium's un-emulated viewport has zero safe-area insets. Anchor
-          // expectations use physical title bounds, including portrait rotation.
-          expect(pressedBounds.x).toBeCloseTo(
-            Math.max(
-              8,
-              Math.min(
-                titleBounds.x + titleBounds.width / 2 - 60,
-                viewport.width - 128,
-              ),
-            ),
-            1,
-          );
-          expect(pressedBounds.y).toBeCloseTo(
-            Math.max(
-              8,
-              Math.min(
-                titleBounds.y + titleBounds.height / 2 - 60,
-                viewport.height - 128,
-              ),
-            ),
-            1,
-          );
+          // Logical horizontal motion maps to physical Y in the rotated shell.
+          const expectedFrame = (finger: { x: number; y: number }) => {
+            const rotated = viewport.height > viewport.width;
+            const centerX = rotated
+              ? titleBounds.x + titleBounds.width / 2
+              : finger.x;
+            const centerY = rotated
+              ? finger.y
+              : titleBounds.y + titleBounds.height / 2;
+            return {
+              x: Math.max(8, Math.min(centerX - 60, viewport.width - 128)),
+              y: Math.max(8, Math.min(centerY - 60, viewport.height - 128)),
+            };
+          };
+          expect(pressedBounds.x).toBeCloseTo(expectedFrame(pressedFinger).x, 1);
+          expect(pressedBounds.y).toBeCloseTo(expectedFrame(pressedFinger).y, 1);
           const scene = lens.locator(".touch-magnifier-scene > *");
           await expect(scene).toHaveCount(1);
           const pressedMatrix = await scene.evaluate((element) =>
@@ -114,12 +108,11 @@ for (const viewport of views)
           await expect(lens).toHaveAttribute("inert", "");
           await expect(lens).toHaveCSS("pointer-events", "none");
           const bounds = (await lens.boundingBox())!;
-          // The lens is parked near the visual title from the first press;
-          // moving the finger changes the magnified contents, not this position.
+          // Title height stays fixed while logical horizontal position follows.
           expect(bounds.width).toBe(120);
           expect(bounds.height).toBe(120);
-          expect(bounds.x).toBeCloseTo(pressedBounds.x, 1);
-          expect(bounds.y).toBeCloseTo(pressedBounds.y, 1);
+          expect(bounds.x).toBeCloseTo(expectedFrame(free).x, 1);
+          expect(bounds.y).toBeCloseTo(expectedFrame(free).y, 1);
           await expect(scene).toHaveCount(1);
           await expect
             .poll(async () => scene.locator("svg").count())
@@ -150,8 +143,8 @@ for (const viewport of views)
               touchPoints: [edge],
             });
             const clamped = (await lens.boundingBox())!;
-            expect(clamped.x).toBeCloseTo(pressedBounds.x, 1);
-            expect(clamped.y).toBeCloseTo(pressedBounds.y, 1);
+            expect(clamped.x).toBeCloseTo(expectedFrame(edge).x, 1);
+            expect(clamped.y).toBeCloseTo(expectedFrame(edge).y, 1);
             expect(clamped.x).toBeGreaterThanOrEqual(8);
             expect(clamped.y).toBeGreaterThanOrEqual(8);
             expect(clamped.x + clamped.width).toBeLessThanOrEqual(
@@ -179,8 +172,8 @@ for (const viewport of views)
             "hidden",
           );
           const snappedBounds = (await lens.boundingBox())!;
-          expect(snappedBounds.x).toBeCloseTo(pressedBounds.x, 1);
-          expect(snappedBounds.y).toBeCloseTo(pressedBounds.y, 1);
+          expect(snappedBounds.x).toBeCloseTo(expectedFrame(finger).x, 1);
+          expect(snappedBounds.y).toBeCloseTo(expectedFrame(finger).y, 1);
           const vertical =
             mode === "academy"
               ? viewport.width > viewport.height

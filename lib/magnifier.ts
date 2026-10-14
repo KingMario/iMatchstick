@@ -26,6 +26,8 @@ const clamp = (value: number, min: number, max: number) =>
 export function getMagnifierPlacement(
   anchor: MagnifierRect,
   viewport: MagnifierViewport,
+  point: MagnifierPoint,
+  rotatedClockwise: boolean,
 ) {
   const safe = viewport.safeArea;
   const safeLeft = clamp(safe?.left ?? 0, 0, viewport.width);
@@ -41,16 +43,19 @@ export function getMagnifierPlacement(
   );
   const leftEdge = (viewport.left ?? 0) + safeLeft + margin;
   const topEdge = (viewport.top ?? 0) + safeTop + margin;
-  // The title's rendered rectangle already includes the shell's rotation.
-  // Keep the lens there while only the sampled contents follow the finger.
+  // The title snapshot is already in physical coordinates. Hold its logical
+  // landscape height while tracking the finger along the game's horizontal
+  // axis: physical x normally, physical y after the clockwise portrait turn.
+  const centerX = rotatedClockwise ? anchor.left + anchor.width / 2 : point.x;
+  const centerY = rotatedClockwise ? point.y : anchor.top + anchor.height / 2;
   return {
     left: clamp(
-      anchor.left + anchor.width / 2 - size / 2,
+      centerX - size / 2,
       leftEdge,
       leftEdge + width - margin * 2 - size,
     ),
     top: clamp(
-      anchor.top + anchor.height / 2 - size / 2,
+      centerY - size / 2,
       topEdge,
       topEdge + height - margin * 2 - size,
     ),

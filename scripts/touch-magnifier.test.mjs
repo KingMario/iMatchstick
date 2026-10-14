@@ -9,7 +9,7 @@ const geometry = require("../.test-out/lib/magnifier.js");
 
 // Execute the production component/effects with modeled hooks and DOM geometry.
 // This checks gesture lifecycle, not native browser layout or pointer handling.
-function mount({ portrait = false } = {}) {
+function mount({ portrait = false, safeArea = {} } = {}) {
   const slots = [],
     effects = [],
     listeners = new Map();
@@ -42,12 +42,10 @@ function mount({ portrait = false } = {}) {
   });
   const surface = {
     ...makeNode(),
-    getBoundingClientRect: () => ({
-      left: 100,
-      top: 140,
-      width: 300,
-      height: 100,
-    }),
+    getBoundingClientRect: () =>
+      portrait
+        ? { left: 150, top: 100, width: 100, height: 300 }
+        : { left: 100, top: 140, width: 300, height: 100 },
   };
   const scene = {
     firstElementChild: null,
@@ -128,7 +126,8 @@ function mount({ portrait = false } = {}) {
           width: "300px",
           height: "100px",
           boxSizing: "border-box",
-          getPropertyValue: () => "0px",
+          getPropertyValue: (name) =>
+            `${safeArea[name.replace("--magnifier-safe-", "")] ?? 0}px`,
         }),
       },
       document: { documentElement: {}, body: {} },
@@ -164,16 +163,35 @@ function mount({ portrait = false } = {}) {
     get anchorReads() {
       return anchorReads;
     },
+    get matrix() {
+      return scene.firstElementChild.style.transform
+        .slice("matrix(".length, -1)
+        .split(",")
+        .map(Number);
+    },
+    get stick() {
+      return { ...tree.props.children[1].props.style };
+    },
     move(point) {
       props = { ...props, point, stick: { ...props.stick, ...point } };
       render();
     },
+    snap(point) {
+      props = { ...props, stick: { ...props.stick, ...point, snapped: true } };
+      render();
+    },
     reflowTitle(bounds) {
       anchorBounds = bounds;
+      render();
     },
     resize(width, height) {
       Object.assign(view, { width, height });
       listeners.get("viewport:resize")();
+      render();
+    },
+    pan(left, top) {
+      Object.assign(view, { offsetLeft: left, offsetTop: top });
+      listeners.get("viewport:scroll")();
       render();
     },
     unmount() {
@@ -185,25 +203,96 @@ function mount({ portrait = false } = {}) {
 }
 
 for (const portrait of [false, true]) {
-  test(`one title-area position survives caption reflow and finger movement (${portrait ? "portrait" : "landscape"})`, () => {
+  const orientation = portrait ? "portrait" : "landscape";
+  const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+
+  test(`title height survives caption reflow while logical horizontal position follows the finger (${orientation})`, () => {
     const lens = mount({ portrait });
     const initial = lens.placement;
+    assert.deepEqual(initial, {
+      left: portrait ? 262 : 120,
+      top: portrait ? 150 : 8,
+      width: 120,
+      height: 120,
+    });
     assert.equal(lens.anchorReads, 1);
     // Model caption expiry and status-text changes within the same persistent
-    // header. Neither that reflow nor subsequent pointer renders may re-anchor.
+    // header. Neither that reflow nor subsequent pointer renders may re-anchor
+    // logical height, but horizontal pointer movement still moves the frame.
     lens.reflowTitle({ left: 10, top: 300, width: 40, height: 40 });
+    assert.deepEqual(lens.placement, initial);
     for (const point of [
+      { x: 250, y: 310 },
       { x: 2, y: 2 },
+      { x: 1000, y: 1000 },
       { x: 350, y: 380 },
     ]) {
       lens.move(point);
-      assert.deepEqual(lens.placement, initial);
+      assert.deepEqual(lens.placement, {
+        ...initial,
+        left: portrait ? initial.left : clamp(point.x - 60, 8, 716),
+        top: portrait ? clamp(point.y - 60, 8, 716) : initial.top,
+      });
       assert.equal(lens.anchorReads, 1);
     }
     // A viewport change reclamps the held rectangle, never the reflowed header.
     lens.resize(300, 390);
-    assert.ok(lens.placement.left + lens.placement.width <= 292);
-    assert.ok(lens.placement.top + lens.placement.height <= 382);
+    assert.deepEqual(lens.placement, {
+      ...initial,
+      left: 172,
+      top: portrait ? 262 : 8,
+    });
+    assert.equal(lens.anchorReads, 1);
+    lens.unmount();
+  });
+
+  test(`logical vertical motion changes sampled contents but keeps the lens frame fixed (${orientation})`, () => {
+    const lens = mount({ portrait });
+    const initial = lens.placement;
+    const matrix = lens.matrix;
+    const point = portrait ? { x: 280, y: 210 } : { x: 180, y: 310 };
+    lens.move(point);
+    assert.deepEqual(lens.placement, initial);
+    assert.deepEqual(lens.matrix.slice(0, 4), matrix.slice(0, 4));
+    assert.equal(lens.matrix[4] - matrix[4], (180 - point.x) * 1.6);
+    assert.equal(lens.matrix[5] - matrix[5], (210 - point.y) * 1.6);
+    assert.equal(lens.anchorReads, 1);
+    lens.unmount();
+  });
+
+  test(`snapping only affects the carried stick; frame and sample use raw finger coordinates (${orientation})`, () => {
+    const lens = mount({ portrait });
+    const point = { x: 250, y: 310 };
+    lens.move(point);
+    const initial = lens.placement;
+    const matrix = lens.matrix;
+    assert.equal(lens.stick.left, 60);
+    assert.equal(lens.stick.top, 60);
+    lens.snap({ x: point.x + 10, y: point.y - 20 });
+    assert.deepEqual(lens.placement, initial);
+    assert.deepEqual(lens.matrix, matrix);
+    assert.equal(lens.stick.left, 76);
+    assert.equal(lens.stick.top, 28);
+    lens.unmount();
+  });
+
+  test(`both lens axes stay within safe areas and the panned visual viewport (${orientation})`, () => {
+    const safeArea = { top: 47, right: 19, bottom: 34, left: 21 };
+    const lens = mount({ portrait, safeArea });
+    lens.pan(30, 40);
+    const width = portrait ? 390 : 844;
+    const height = portrait ? 844 : 390;
+    for (const point of [
+      { x: -100, y: -100 },
+      { x: 1000, y: 1000 },
+    ]) {
+      lens.move(point);
+      const frame = lens.placement;
+      assert.ok(frame.left >= 30 + safeArea.left + 8);
+      assert.ok(frame.top >= 40 + safeArea.top + 8);
+      assert.ok(frame.left + frame.width <= 30 + width - safeArea.right - 8);
+      assert.ok(frame.top + frame.height <= 40 + height - safeArea.bottom - 8);
+    }
     assert.equal(lens.anchorReads, 1);
     lens.unmount();
   });
