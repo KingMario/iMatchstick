@@ -299,3 +299,102 @@ test("a new question cannot acquire recognition before the prior native end", as
     "3+1=4",
   );
 });
+
+for (const clipboardMode of [
+  "success",
+  "reject",
+  "missing",
+  "delayed",
+] as const) {
+  test(`copy voice diagnostic metadata: ${clipboardMode}`, async ({ page }) => {
+    await page.evaluate((mode) => {
+      Object.defineProperty(navigator, "clipboard", {
+        configurable: true,
+        value:
+          mode === "missing"
+            ? undefined
+            : {
+                writeText(value: string) {
+                  Object.assign(window, { copiedVoiceEvents: value });
+                  if (mode === "reject")
+                    return Promise.reject(new Error("NotAllowedError"));
+                  if (mode === "delayed")
+                    return new Promise<void>((resolve) =>
+                      Object.assign(window, { finishVoiceCopy: resolve }),
+                    );
+                  return Promise.resolve();
+                },
+              },
+      });
+    }, clipboardMode);
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    const panel = page.locator(".voice-diagnostics");
+    await panel.locator("summary").click();
+    await panel.getByRole("checkbox").check();
+    await expect(
+      panel.getByRole("button", { name: "Copy all voice events" }),
+    ).toBeDisabled();
+    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.locator(".play-controls button").last().click();
+    await emit(page, "result", {
+      values: ["PRIVATE SPOKEN WORDS"],
+      final: false,
+    });
+    await emit(page, "end");
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await panel.getByRole("button", { name: "Copy all voice events" }).click();
+    if (clipboardMode === "delayed") {
+      await expect(
+        panel.getByRole("button", { name: "Copying…" }),
+      ).toBeDisabled();
+      await panel.getByRole("button", { name: "Clear events" }).click();
+      await page.evaluate(() =>
+        (
+          window as unknown as { finishVoiceCopy: () => void }
+        ).finishVoiceCopy(),
+      );
+      await expect(panel).not.toContainText("Voice events copied");
+      await expect(panel.locator("textarea")).toHaveCount(0);
+      return;
+    }
+    if (clipboardMode === "success") {
+      await expect(panel).toContainText("Voice events copied");
+      const output = await page.evaluate(
+        () =>
+          (window as unknown as { copiedVoiceEvents: string })
+            .copiedVoiceEvents,
+      );
+      expect(output).toContain("Build:");
+      expect(output).toContain("attempt=1");
+      expect(output).toContain("event=result");
+      expect(output).not.toContain("PRIVATE");
+      await panel
+        .getByRole("button", { name: "Copy all voice events" })
+        .click();
+    } else {
+      const fallback = panel.getByRole("textbox", {
+        name: "Voice event snapshot to copy",
+      });
+      await expect(fallback).toBeVisible();
+      await expect(fallback).toHaveValue(/event=result/);
+      expect(await fallback.inputValue()).not.toContain("PRIVATE");
+      await fallback.focus();
+      expect(
+        await fallback.evaluate(
+          (node: HTMLTextAreaElement) =>
+            node.selectionEnd - node.selectionStart,
+        ),
+      ).toBe((await fallback.inputValue()).length);
+      expect(
+        await panel.evaluate((node) => node.scrollWidth <= node.clientWidth),
+      ).toBe(true);
+    }
+    await panel.getByRole("checkbox").uncheck();
+    await panel.getByRole("checkbox").check();
+    await expect(panel.locator("textarea")).toHaveCount(0);
+    await expect(
+      panel.getByRole("button", { name: "Copy all voice events" }),
+    ).toBeDisabled();
+    await expect(panel).not.toContainText("Voice events copied");
+  });
+}

@@ -120,7 +120,7 @@ Difficulty groups:
 
 ## Optional voice event diagnostics
 
-In Settings, expand Voice diagnostics and enable the event timeline before testing two voice answers. It is off by default. The timeline shows attempt numbers, relative times, browser events, and whether the application accepted or ignored callbacks. It retains at most 120 metadata entries in page memory; disabling or reloading clears them. It does not retain transcript text or audio, export diagnostics, or send diagnostic data over the network. Browser audio/speech events do not establish that usable microphone samples reached the native recognizer. This panel observes the existing recognition strategy without changing it.
+In Settings, expand Voice diagnostics and enable the event timeline before testing two voice answers. It is off by default. The timeline shows attempt numbers, relative times, browser events, and whether the application accepted or ignored callbacks. It retains the full event list from the current diagnostic session in page memory without an entry limit; disabling or reloading clears them. It does not retain transcript text or audio, or send diagnostic data over the network. Copy all voice events copies the retained metadata snapshot with build/commit, attempt, and millisecond timing to your clipboard. If clipboard access is unavailable, selectable text is shown for manual copy. Clearing the panel does not clear a previously copied clipboard snapshot. Browser audio/speech events do not establish that usable microphone samples reached the native recognizer. This panel observes the existing recognition strategy without changing it.
 
 ## Deployment
 
@@ -135,3 +135,4 @@ https://mario.studio/iMatchstick/
 MIT License.
 
 Copyright (c) Mario Studio 2026-2027
+

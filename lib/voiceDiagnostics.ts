@@ -86,7 +86,7 @@ const count = (value: unknown) =>
     ? Math.min(10000, Math.max(0, Math.floor(value)))
     : undefined;
 
-// Opt-in, bounded, page-memory-only metadata. Never spread caller input: even
+// Opt-in, page-memory-only metadata for the complete diagnostic session. Never spread caller input: even
 // accidental transcript/audio/custom fields cannot enter the retained record.
 export function createVoiceDiagnostics(now = () => performance.now()) {
   let enabled = false;
@@ -134,8 +134,36 @@ export function createVoiceDiagnostics(now = () => performance.now()) {
         if (value !== undefined) entry[key] = value;
       }
       entries.push(entry);
-      if (entries.length > 120) entries.shift();
       return true;
     },
   };
+}
+
+/** Complete metadata-only snapshot; never serialize arbitrary entry fields. */
+export function formatVoiceDiagnostics(
+  entries: readonly VoiceTraceEntry[],
+  build: { id: string; sha: string },
+) {
+  const lines = entries.map((entry) => {
+    const fields = [
+      `#${entry.sequence}`,
+      `attempt=${entry.attempt}`,
+      `+${entry.elapsedMs}ms`,
+      `event=${entry.event}`,
+      `disposition=${entry.disposition}`,
+    ];
+    if (entry.reason) fields.push(`reason=${entry.reason}`);
+    if (entry.error) fields.push(`error=${entry.error}`);
+    for (const key of ["resultCount", "finalCount", "resultIndex"] as const) {
+      if (entry[key] !== undefined) fields.push(`${key}=${entry[key]}`);
+    }
+    return fields.join(" · ");
+  });
+  return [
+    "iMatchstick voice event diagnostics",
+    `Build: ${build.id} · Commit: ${build.sha || "unknown"}`,
+    `Events: ${lines.length}; times since enable/clear`,
+    "Metadata only. No speech text or audio.",
+    ...lines,
+  ].join("\n");
 }

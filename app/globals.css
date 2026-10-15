@@ -1700,3 +1700,26 @@ footer a:hover {
   overflow-wrap: anywhere;
   margin-block: 6px;
 }
+
+.voice-diagnostics-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.voice-diagnostics-actions button {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.voice-diagnostics-snapshot {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 16px;
+  user-select: text;
+  -webkit-user-select: text;
+  resize: vertical;
+}
