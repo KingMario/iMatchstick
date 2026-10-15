@@ -27,6 +27,11 @@ import { StatsBar } from "@/components/matchstick/StatsBar";
 import { SuccessConfetti } from "@/components/matchstick/SuccessConfetti";
 import { usePwaUpdate } from "@/components/matchstick/usePwaUpdate";
 import { playApplause, pauseApplause } from "@/lib/audio";
+import {
+  createVoiceDiagnostics,
+  type VoiceTraceEntry,
+  type VoiceTraceInput,
+} from "@/lib/voiceDiagnostics";
 import { readJson, writeJson } from "@/lib/clientStorage";
 import { Academy } from "@/components/matchstick/Academy";
 import { academyLessons } from "@/lib/academy";
@@ -175,6 +180,12 @@ export function MatchstickGame() {
   const [stats, setStats] = useState<Stats>(initialStats);
   const [drag, setDrag] = useState<DragState>(null);
   const [listening, setListening] = useState(false);
+  const diagnostics = useRef(createVoiceDiagnostics());
+  const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
+  const [diagnosticEntries, setDiagnosticEntries] = useState<VoiceTraceEntry[]>(
+    [],
+  );
+  const voiceAttempt = useRef(0);
   const [voicePhase, setVoicePhase] = useState<VoicePhase>("starting");
   const [voiceCaption, setVoiceCaption] = useState<{
     text: string;
@@ -301,10 +312,12 @@ export function MatchstickGame() {
   }, []);
 
   useEffect(() => {
+    const recorder = diagnostics.current;
     return () => {
       if (dragReturnTimer.current !== null) {
         window.clearTimeout(dragReturnTimer.current);
       }
+      recorder.setEnabled(false);
       voiceSession.current?.dispose();
       voiceSession.current = null;
       const current = dragRef.current ?? pendingDrag.current;
@@ -639,10 +652,16 @@ export function MatchstickGame() {
     setListening(true);
     setVoiceCaption({ text: "", final: false });
     setMessageKey("voiceListening");
+    const attempt = ++voiceAttempt.current;
+    const record = (entry: VoiceTraceInput) => {
+      if (diagnostics.current.record(attempt, entry))
+        setDiagnosticEntries(diagnostics.current.snapshot());
+    };
     const session = createVoiceSession(
       Recognition,
       language === "zh" ? "zh-CN" : "en-US",
       {
+        trace: record,
         phase: (phase) => {
           if (voiceSession.current !== session) return;
           setVoicePhase(phase);
@@ -656,6 +675,14 @@ export function MatchstickGame() {
           }
         },
         released: () => {
+          record({
+            event: "app-release",
+            disposition:
+              voiceSession.current !== session ? "ignored" : "received",
+            ...(voiceSession.current !== session
+              ? { reason: "replaced" as const }
+              : {}),
+          });
           if (voiceSession.current !== session) return;
           voiceSession.current = null;
           if (pendingApplause.current === session) {
@@ -669,11 +696,30 @@ export function MatchstickGame() {
           );
         },
         transcript: (value, final) => {
+          record({
+            event: "app-caption",
+            disposition:
+              voiceSession.current !== session || loadingRef.current
+                ? "ignored"
+                : "accepted",
+            ...(voiceSession.current !== session
+              ? { reason: "replaced" as const }
+              : loadingRef.current
+                ? { reason: "loading" as const }
+                : {}),
+          });
           if (voiceSession.current !== session || loadingRef.current) return;
           setVoiceCaption({ text: value, final });
         },
         answer: (transcripts) => {
-          if (voiceSession.current !== session || loadingRef.current) return;
+          if (voiceSession.current !== session || loadingRef.current) {
+            record({
+              event: "app-answer",
+              disposition: "ignored",
+              reason: loadingRef.current ? "loading" : "replaced",
+            });
+            return;
+          }
           // A parseable but wrong first alternative must not hide a later answer.
           const answer = transcripts
             .map((transcript) => ({
@@ -684,6 +730,10 @@ export function MatchstickGame() {
               ({ expression }) =>
                 expression !== null && isAnswer(expression, puzzle.answers),
             );
+          record({
+            event: "app-answer",
+            disposition: answer?.expression ? "accepted" : "unmatched",
+          });
           if (answer?.expression) {
             session.complete();
             solve(answer.expression);
@@ -1441,6 +1491,19 @@ export function MatchstickGame() {
             </ol>
           </GameOverlay>
           <GameSettings
+            voiceDiagnostics={{
+              enabled: diagnosticsEnabled,
+              entries: diagnosticEntries,
+              onEnabledChange: (enabled) => {
+                diagnostics.current.setEnabled(enabled);
+                setDiagnosticsEnabled(enabled);
+                setDiagnosticEntries([]);
+              },
+              onClear: () => {
+                diagnostics.current.clear();
+                setDiagnosticEntries([]);
+              },
+            }}
             isPhone={isPhone}
             update={pwaUpdate}
             open={settingsOpen}

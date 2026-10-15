@@ -1266,3 +1266,49 @@ test("sound off to on enables success audio without reload, and off silences lat
   g.act(() => g.recognitions[1].end());
   assert.equal(g.audioEvents.filter((event) => event === "play").length, 2);
 });
+
+test("opt-in event metadata distinguishes stale callbacks and never stores spoken text", async () => {
+  const g = mount({ soundEnabled: false, delayedAbort: true });
+  const panel = () => g.byType("GameSettings").props.voiceDiagnostics;
+  assert.equal(panel().enabled, false);
+  assert.deepEqual(Array.from(panel().entries), []);
+  g.act(() => panel().onEnabledChange(true));
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  const first = g.recognitions[0],
+    late = first.onresult;
+  g.act(() => first.result("7-5=2", true));
+  g.act(() => g.byType("GameControls").props.onNewPuzzle());
+  await Promise.resolve();
+  g.render();
+  g.act(() =>
+    late({
+      resultIndex: 0,
+      results: [
+        Object.assign([{ transcript: "PRIVATE OLD TEXT" }], { isFinal: true }),
+      ],
+    }),
+  );
+  g.act(() => first.end());
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  g.act(() => g.recognitions[1].result("PRIVATE NEW TEXT", false));
+  assert.ok(
+    panel().entries.some(
+      (entry) =>
+        entry.event === "result" &&
+        entry.disposition === "ignored" &&
+        entry.attempt === 1,
+    ),
+  );
+  assert.ok(
+    panel().entries.some(
+      (entry) =>
+        entry.event === "app-caption" &&
+        entry.disposition === "accepted" &&
+        entry.attempt === 2,
+    ),
+  );
+  assert.equal(JSON.stringify(panel().entries).includes("PRIVATE"), false);
+  g.act(() => panel().onEnabledChange(false));
+  g.act(() => g.recognitions[1].end());
+  assert.deepEqual(Array.from(panel().entries), []);
+});

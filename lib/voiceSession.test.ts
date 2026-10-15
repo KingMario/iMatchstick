@@ -382,3 +382,70 @@ it("missing natural end triggers one bounded abort, never a new recognition star
   recognition.onend?.();
   assert.equal(session.released, true);
 });
+
+it("diagnostics receive native events before stale-result filtering, without transcript content", () => {
+  const traces: unknown[] = [];
+  const session = createVoiceSession(Recognition, "en-US", {
+    transcript() {},
+    answer() {},
+    finish() {},
+    trace(event) {
+      traces.push(event);
+    },
+  });
+  session.start();
+  const recognition = Recognition.latest,
+    resultCallback = recognition.onresult;
+  resultCallback?.(result([{ values: ["PRIVATE UTTERANCE"], final: false }]));
+  session.cancel();
+  resultCallback?.(
+    result([{ values: ["PRIVATE LATE UTTERANCE"], final: true }]),
+  );
+  const results = (
+    traces as { event: string; disposition: string; resultCount?: number }[]
+  ).filter((event) => event.event === "result");
+  assert.deepEqual(
+    results.map((event) => event.disposition),
+    ["received", "ignored"],
+  );
+  assert.equal(results[0].resultCount, 1);
+  assert.equal(JSON.stringify(traces).includes("PRIVATE"), false);
+});
+it("a failing diagnostic observer cannot change recognition results or shutdown", () => {
+  let answers = 0;
+  const session = createVoiceSession(Recognition, "en-US", {
+    transcript() {},
+    answer() {
+      answers++;
+    },
+    finish() {},
+    trace() {
+      throw new Error("observer failure");
+    },
+  });
+  session.start();
+  Recognition.latest.onresult?.(result([{ values: ["7-5=2"], final: true }]));
+  assert.equal(answers, 1);
+  session.cancel();
+  assert.equal(session.released, true);
+});
+it("saved native callbacks do not notify diagnostics after disposal", () => {
+  const traces: unknown[] = [];
+  const session = createVoiceSession(Recognition, "en-US", {
+    transcript() {},
+    answer() {},
+    finish() {},
+    trace(event) {
+      traces.push(event);
+    },
+  });
+  session.start();
+  const recognition = Recognition.latest;
+  const lateResult = recognition.onresult,
+    lateStart = recognition.onaudiostart;
+  session.dispose();
+  const count = traces.length;
+  lateResult?.(result([{ values: ["PRIVATE LATE"], final: false }]));
+  lateStart?.();
+  assert.equal(traces.length, count);
+});

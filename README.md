@@ -118,6 +118,10 @@ Difficulty groups:
 | 7     | Hard+   | Multi-digit high-place change                                     |
 | 8     | Expert  | Multi-digit cross-equals, operator change, or multiple candidates |
 
+## Optional voice event diagnostics
+
+In Settings, expand Voice diagnostics and enable the event timeline before testing two voice answers. It is off by default. The timeline shows attempt numbers, relative times, browser events, and whether the application accepted or ignored callbacks. It retains at most 120 metadata entries in page memory; disabling or reloading clears them. It does not retain transcript text or audio, export diagnostics, or send diagnostic data over the network. Browser audio/speech events do not establish that usable microphone samples reached the native recognizer. This panel observes the existing recognition strategy without changing it.
+
 ## Deployment
 
 The repository includes a GitHub Actions workflow for GitHub Pages deployment. Pushes to `main` build the static Next.js export and publish it to Pages.

@@ -1,3 +1,4 @@
+import type { VoiceTraceInput } from "./voiceDiagnostics";
 import type {
   SpeechRecognitionConstructor,
   SpeechRecognitionLike,
@@ -27,6 +28,7 @@ export function createVoiceSession(
     finish: (reason: VoiceFinish, error?: string) => void;
     phase?: (phase: VoicePhase) => void;
     released?: () => void;
+    trace?: (event: VoiceTraceInput) => void;
   },
 ) {
   let recognition: SpeechRecognitionLike | null = null;
@@ -36,8 +38,26 @@ export function createVoiceSession(
   let requested = false;
   let started = false;
   let terminal = false;
+  let disposed = false;
   let watchdog: ReturnType<typeof setTimeout> | null = null;
   let shutdownWatchdog: ReturnType<typeof setTimeout> | null = null;
+  const trace = (event: VoiceTraceInput | (() => VoiceTraceInput)) => {
+    if (disposed || !callbacks.trace) return;
+    try {
+      callbacks.trace(typeof event === "function" ? event() : event);
+    } catch {
+      /* Diagnostics cannot affect recognition. */
+    }
+  };
+  const nativeEvent = (
+    event: VoiceTraceInput["event"],
+    inactive = !eligible || released,
+  ) =>
+    trace({
+      event,
+      disposition: inactive ? "ignored" : "received",
+      ...(inactive ? { reason: "inactive" as const } : {}),
+    });
   const clearWatchdog = () => {
     if (watchdog !== null) clearTimeout(watchdog);
     watchdog = null;
@@ -58,6 +78,10 @@ export function createVoiceSession(
         recognition.onaudioend =
           null;
       recognition.onspeechstart = recognition.onspeechend = null;
+      recognition.onsoundstart =
+        recognition.onsoundend =
+        recognition.onnomatch =
+          null;
     }
   };
   const release = () => {
@@ -68,6 +92,7 @@ export function createVoiceSession(
     callbacks.released?.();
   };
   const cancel = () => {
+    nativeEvent("request-cancel", released || closing);
     if (released || closing) return;
     eligible = false;
     closing = true;
@@ -75,16 +100,22 @@ export function createVoiceSession(
     if (recognition) recognition.onresult = null;
     callbacks.phase?.("stopping");
     shutdownWatchdog = setTimeout(() => {
-      if (!released) callbacks.phase?.("blocked");
+      if (!released) {
+        trace({ event: "timeout", disposition: "received", reason: "release" });
+        callbacks.phase?.("blocked");
+      }
       // Keep end attached. A timeout is NOT evidence that native audio released.
     }, 5000);
     try {
+      trace({ event: "abort-call", disposition: "received" });
       recognition?.abort();
     } catch {
+      trace({ event: "abort-throw", disposition: "received" });
       /* Wait for end or show recovery. */
     }
   };
   const complete = () => {
+    nativeEvent("answer-complete", released || closing);
     if (released || closing) return;
     eligible = false;
     closing = true;
@@ -96,11 +127,20 @@ export function createVoiceSession(
     shutdownWatchdog = setTimeout(() => {
       if (released) return;
       shutdownWatchdog = setTimeout(() => {
-        if (!released) callbacks.phase?.("blocked");
+        if (!released) {
+          trace({
+            event: "timeout",
+            disposition: "received",
+            reason: "release",
+          });
+          callbacks.phase?.("blocked");
+        }
       }, 5000);
       try {
+        trace({ event: "abort-call", disposition: "received" });
         recognition?.abort();
       } catch {
+        trace({ event: "abort-throw", disposition: "received" });
         /* End still owns release. */
       }
     }, 5000);
@@ -120,14 +160,18 @@ export function createVoiceSession(
     },
     // Unmount cannot await end; discard UI callbacks and request native shutdown.
     dispose() {
+      nativeEvent("dispose", released);
       eligible = false;
       released = true;
       detach();
       try {
+        trace({ event: "abort-call", disposition: "received" });
         recognition?.abort();
       } catch {}
+      disposed = true;
     },
     start() {
+      nativeEvent("request-start", requested || released || closing);
       if (requested || released || closing) return;
       requested = true;
       try {
@@ -137,21 +181,52 @@ export function createVoiceSession(
         recognition.interimResults = true;
         recognition.maxAlternatives = 5;
         recognition.onstart = () => {
+          nativeEvent("start", !eligible || released || started);
           if (!eligible || released || started) return;
           started = true;
           phase("started");
           clearWatchdog();
           watchdog = setTimeout(() => {
             if (!eligible) return;
+            trace({
+              event: "timeout",
+              disposition: "received",
+              reason: "listening",
+            });
             finish("timeout");
             cancel();
           }, 30000);
         };
-        recognition.onaudiostart = () => phase("audio");
-        recognition.onspeechstart = () => phase("speech");
-        recognition.onspeechend = () => phase("speech-ended");
-        recognition.onaudioend = () => phase("audio-ended");
+        recognition.onaudiostart = () => {
+          nativeEvent("audiostart");
+          phase("audio");
+        };
+        recognition.onspeechstart = () => {
+          nativeEvent("speechstart");
+          phase("speech");
+        };
+        recognition.onspeechend = () => {
+          nativeEvent("speechend");
+          phase("speech-ended");
+        };
+        recognition.onaudioend = () => {
+          nativeEvent("audioend");
+          phase("audio-ended");
+        };
+        recognition.onsoundstart = () => nativeEvent("soundstart");
+        recognition.onsoundend = () => nativeEvent("soundend");
+        recognition.onnomatch = () => nativeEvent("nomatch");
         recognition.onresult = (event) => {
+          trace(() => ({
+            event: "result",
+            disposition: !eligible || released ? "ignored" : "received",
+            resultCount: event.results.length,
+            resultIndex: event.resultIndex,
+            finalCount: Array.from(
+              { length: event.results.length },
+              (_, index) => event.results[index].isFinal !== false,
+            ).filter(Boolean).length,
+          }));
           if (!eligible || released) return;
           phase("result");
           const captions: string[] = [];
@@ -192,11 +267,17 @@ export function createVoiceSession(
           if (candidates.length && eligible) callbacks.answer(candidates);
         };
         recognition.onerror = (event) => {
+          trace({
+            event: "error",
+            disposition: !eligible || released ? "ignored" : "received",
+            error: event.error,
+          });
           if (!eligible || released) return;
           finish("error", event.error);
           cancel();
         };
         recognition.onend = () => {
+          nativeEvent("end", released);
           if (released) return;
           if (eligible) finish("end");
           release();
@@ -204,11 +285,18 @@ export function createVoiceSession(
         callbacks.phase?.("starting");
         watchdog = setTimeout(() => {
           if (!eligible) return;
+          trace({
+            event: "timeout",
+            disposition: "received",
+            reason: "starting",
+          });
           finish("start-timeout");
           cancel();
         }, 30000);
+        trace({ event: "start-call", disposition: "received" });
         recognition.start();
       } catch {
+        trace({ event: "startup-throw", disposition: "received" });
         eligible = false;
         finish("start-error");
         release();

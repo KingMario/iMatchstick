@@ -3,11 +3,16 @@ import { type DragHand } from "@/lib/drag";
 import { ActionIcon } from "./ActionIcon";
 import { type CopyText, type Language } from "./copy";
 import { GameOverlay } from "./GameOverlay";
+import {
+  VoiceDiagnostics,
+  type VoiceDiagnosticsProps,
+} from "./VoiceDiagnostics";
 import { InstallShortcut } from "./InstallShortcut";
 import { StatsBar } from "./StatsBar";
 import { buildId, buildSha, type usePwaUpdate } from "./usePwaUpdate";
 
 type GameSettingsProps = {
+  voiceDiagnostics?: VoiceDiagnosticsProps;
   update: ReturnType<typeof usePwaUpdate>;
   open: boolean;
   text: CopyText;
@@ -29,6 +34,7 @@ type GameSettingsProps = {
 };
 
 export function GameSettings({
+  voiceDiagnostics,
   update,
   open,
   text,
@@ -218,6 +224,9 @@ export function GameSettings({
           </footer>
         </div>
       </details>
+      {voiceDiagnostics && (
+        <VoiceDiagnostics language={language} {...voiceDiagnostics} />
+      )}
     </GameOverlay>
   );
 }

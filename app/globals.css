@@ -1685,3 +1685,18 @@ footer a:hover {
 .drag-ghost.snapped .matchstick-art {
   animation: none;
 }
+
+/* Diagnostic disclosure stays outside the compact preferences grid. */
+.voice-diagnostics label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+.voice-diagnostics ol {
+  padding-inline-start: 1.5em;
+}
+.voice-diagnostics li {
+  overflow-wrap: anywhere;
+  margin-block: 6px;
+}
