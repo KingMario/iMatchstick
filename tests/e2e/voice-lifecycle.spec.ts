@@ -398,3 +398,88 @@ for (const clipboardMode of [
     await expect(panel).not.toContainText("Voice events copied");
   });
 }
+
+test("English words use en-US and only a legal puzzle answer solves", async ({
+  page,
+}) => {
+  const mic = page.locator(".play-controls button").last();
+  for (const speech of [
+    "seven minus five equals three", // false arithmetic
+    "six minus one equals five", // true, but not a move from this puzzle
+    "seven bananas minus five equals two", // must not discard unknown speech
+    "seven minus five is equal to two", // legal answer
+  ]) {
+    await mic.click();
+    expect(
+      await page.evaluate(
+        () =>
+          (
+            window as unknown as { voiceInstances: { lang: string }[] }
+          ).voiceInstances.at(-1)?.lang,
+      ),
+    ).toBe("en-US");
+    await emit(page, "result", { values: [speech], final: true });
+    await expect(mic).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator(".equation")).toHaveAttribute(
+      "aria-label",
+      speech === "seven minus five is equal to two" ? "7-5=2" : "7-5=3",
+    );
+  }
+  await expect(page.locator(".answer-progress")).toHaveText("1/1");
+});
+
+test("hyphenated multi-digit English answer and reversed subtraction solve", async ({
+  page,
+}) => {
+  await page.goto("/?puzzle=23%2B7%3D39");
+  const mic = page.locator(".play-controls button").last();
+  await expect(page.locator(".equation")).toHaveAttribute(
+    "aria-label",
+    "23+7=39",
+  );
+  await mic.click();
+  await emit(page, "result", {
+    values: ["twenty-three and seven gets thirty"],
+    final: true,
+  });
+  await expect(page.locator(".equation")).toHaveAttribute(
+    "aria-label",
+    "23+7=30",
+  );
+  await page.goto("/?puzzle=7-5%3D3");
+  await mic.click();
+  await emit(page, "result", {
+    values: ["subtract five from seven equals two"],
+    final: true,
+  });
+  await expect(page.locator(".equation")).toHaveAttribute(
+    "aria-label",
+    "7-5=2",
+  );
+});
+
+test("changing UI language uses zh-CN and preserves Chinese answers", async ({
+  page,
+}) => {
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page
+    .locator(".language-switch")
+    .getByRole("button", { name: "中", exact: true })
+    .click();
+  await page.getByRole("button", { name: "关闭", exact: true }).click();
+  const mic = page.locator(".play-controls button").last();
+  await mic.click();
+  expect(
+    await page.evaluate(
+      () =>
+        (
+          window as unknown as { voiceInstances: { lang: string }[] }
+        ).voiceInstances.at(-1)?.lang,
+    ),
+  ).toBe("zh-CN");
+  await emit(page, "result", { values: ["七减五等于二"], final: true });
+  await expect(page.locator(".equation")).toHaveAttribute(
+    "aria-label",
+    "7-5=2",
+  );
+});

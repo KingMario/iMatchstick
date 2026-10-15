@@ -66,10 +66,10 @@ export function parseSpokenExpression(
 ): string | null {
   for (const transcript of transcripts) {
     const expression =
-      parseSymbolExpression(transcript) ??
-      (language === "zh"
-        ? parseChineseExpression(transcript)
-        : parseEnglishExpression(transcript));
+      language === "zh"
+        ? (parseSymbolExpression(transcript) ??
+          parseChineseExpression(transcript))
+        : parseEnglishExpression(transcript);
 
     if (expression) {
       return expression;
@@ -161,99 +161,164 @@ function parseChineseNumber(value: string): number | null {
   return null;
 }
 
+// Only normalize known arithmetic tokens. Never discard unknown speech or
+// punctuation: doing so could turn a different statement into a valid answer.
 function parseEnglishExpression(transcript: string): string | null {
-  const tokens = transcript
+  const normalized = transcript
     .toLowerCase()
-    .replace(/[=]/g, " equals ")
-    .replace(/[+]/g, " plus ")
-    .replace(/[-]/g, " minus ")
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[０-９]/g, (char) =>
+      String.fromCharCode(char.charCodeAt(0) - 0xff10 + 48),
+    )
+    .replace(/[＋]/g, "+")
+    .replace(/[－−]/g, "-")
+    .replace(/[＝]/g, "=")
     .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const operatorIndex = tokens.findIndex((token) =>
-    ["plus", "add", "minus", "subtract"].includes(token),
+    .replace(/[.!?]$/, "")
+    // A hyphen is part of a cardinal only between a tens word and a unit.
+    .replace(
+      /\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)-(one|two|three|four|five|six|seven|eight|nine)\b/g,
+      "$1 $2",
+    )
+    .replace(/([+=-])/g, " $1 ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const equality = normalized.match(
+    /^(.+?) (?:equals|equal(?: to)?|is(?: equal to)?|gets|makes|gives|=) (.+)$/,
   );
-  const equalsIndex = tokens.findIndex((token) =>
-    ["equals", "equal", "is"].includes(token),
-  );
-
-  if (operatorIndex <= 0 || equalsIndex <= operatorIndex + 1) {
-    return null;
+  if (!equality) return null;
+  const result = parseEnglishNumber(equality[2]);
+  if (result === null) return null;
+  const calculation = equality[1];
+  // A single cardinal ("one hundred and two") is not an addition.
+  if (parseEnglishNumber(calculation) !== null) return null;
+  const candidates = new Set<string>();
+  const addCandidate = (left: string, operator: string, right: string) => {
+    const a = parseEnglishNumber(left);
+    const b = parseEnglishNumber(right);
+    if (a !== null && b !== null)
+      candidates.add(`${a}${operator}${b}=${result}`);
+  };
+  // Infix operators can contain "and", which is also part of a cardinal.
+  // Try every boundary and accept only one unambiguous complete reading.
+  const tokens = calculation.split(" ");
+  const operators: Record<string, string> = {
+    plus: "+",
+    add: "+",
+    and: "+",
+    "+": "+",
+    minus: "-",
+    subtract: "-",
+    less: "-",
+    "take away": "-",
+    "taken away": "-",
+    "decreased by": "-",
+    "reduced by": "-",
+    "increased by": "+",
+    "-": "-",
+  };
+  for (let start = 1; start < tokens.length - 1; start++) {
+    for (const [phrase, operator] of Object.entries(operators)) {
+      const width = phrase.split(" ").length;
+      if (tokens.slice(start, start + width).join(" ") === phrase) {
+        addCandidate(
+          tokens.slice(0, start).join(" "),
+          operator,
+          tokens.slice(start + width).join(" "),
+        );
+      }
+    }
   }
-
-  const left = parseEnglishNumber(tokens.slice(0, operatorIndex));
-  const right = parseEnglishNumber(
-    tokens.slice(operatorIndex + 1, equalsIndex),
-  );
-  const result = parseEnglishNumber(tokens.slice(equalsIndex + 1));
-
-  if (left === null || right === null || result === null) {
-    return null;
+  if (tokens[0] === "add") {
+    for (let index = 2; index < tokens.length - 1; index++) {
+      if (tokens[index] === "and") {
+        addCandidate(
+          tokens.slice(1, index).join(" "),
+          "+",
+          tokens.slice(index + 1).join(" "),
+        );
+      }
+    }
   }
-
-  return `${left}${["plus", "add"].includes(tokens[operatorIndex]) ? "+" : "-"}${right}=${result}`;
+  // "Subtract two from six" and "two less than six" mean 6-2.
+  for (const [pattern, operator, reverse] of [
+    [/^subtract (.+) from (.+)$/, "-", true],
+    [/^take (.+) away from (.+)$/, "-", true],
+    [/^take away (.+) from (.+)$/, "-", true],
+    [/^(.+) (?:subtracted|taken away) from (.+)$/, "-", true],
+    [/^(.+) less than (.+)$/, "-", true],
+    [/^(.+) more than (.+)$/, "+", true],
+    [/^add (.+) to (.+)$/, "+", true],
+    [/^(.+) added to (.+)$/, "+", true],
+  ] as const) {
+    const match = calculation.match(pattern);
+    if (match)
+      addCandidate(match[reverse ? 2 : 1], operator, match[reverse ? 1 : 2]);
+  }
+  return candidates.size === 1 ? [...candidates][0] : null;
 }
 
-function parseEnglishNumber(tokens: string[]): number | null {
-  if (tokens.length === 0) {
-    return null;
+const englishSmallNumbers = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+];
+const englishTens = [
+  "twenty",
+  "thirty",
+  "forty",
+  "fifty",
+  "sixty",
+  "seventy",
+  "eighty",
+  "ninety",
+];
+
+function parseEnglishNumber(value: string): string | null {
+  // Keep digit spelling, including leading zeros, for the game's validator.
+  if (/^\d+$/.test(value)) {
+    return Number.isSafeInteger(Number(value)) ? value : null;
   }
-
-  if (tokens.length === 1 && /^\d+$/.test(tokens[0])) {
-    return Number(tokens[0]);
-  }
-
-  const values: Record<string, number> = {
-    zero: 0,
-    one: 1,
-    two: 2,
-    three: 3,
-    four: 4,
-    five: 5,
-    six: 6,
-    seven: 7,
-    eight: 8,
-    nine: 9,
-    ten: 10,
-    eleven: 11,
-    twelve: 12,
-    thirteen: 13,
-    fourteen: 14,
-    fifteen: 15,
-    sixteen: 16,
-    seventeen: 17,
-    eighteen: 18,
-    nineteen: 19,
-    twenty: 20,
-    thirty: 30,
-    forty: 40,
-    fifty: 50,
-    sixty: 60,
-    seventy: 70,
-    eighty: 80,
-    ninety: 90,
-  };
-
-  if (tokens.every((token) => /^\d$/.test(token))) {
-    return Number(tokens.join(""));
-  }
-
-  let total = 0;
-  let consumed = false;
-
-  tokens.forEach((token) => {
-    if (token === "hundred") {
-      total = total === 0 ? 100 : total * 100;
-      consumed = true;
-      return;
+  const tokens = value.split(" ");
+  function underHundred(words: string[]): number | null {
+    if (words.length === 1) {
+      const small = englishSmallNumbers.indexOf(words[0]);
+      if (small >= 0) return small;
+      if (/^(?:[1-9]?\d)$/.test(words[0])) return Number(words[0]);
     }
-
-    if (values[token] !== undefined) {
-      total += values[token];
-      consumed = true;
-    }
-  });
-
-  return consumed ? total : null;
+    const tens = englishTens.indexOf(words[0]);
+    if (tens < 0) return null;
+    if (words.length === 1) return (tens + 2) * 10;
+    if (words.length !== 2) return null;
+    const unit = englishSmallNumbers.indexOf(words[1]);
+    const digit = /^[1-9]$/.test(words[1]) ? Number(words[1]) : unit;
+    return digit >= 1 && digit <= 9 ? (tens + 2) * 10 + digit : null;
+  }
+  if (tokens[1] === "hundred") {
+    const hundreds = /^[1-9]$/.test(tokens[0])
+      ? Number(tokens[0])
+      : englishSmallNumbers.indexOf(tokens[0]);
+    if (hundreds < 1 || hundreds > 9) return null;
+    if (tokens.length === 2) return String(hundreds * 100);
+    const rest = underHundred(tokens.slice(tokens[2] === "and" ? 3 : 2));
+    return rest !== null && rest > 0 ? String(hundreds * 100 + rest) : null;
+  }
+  const number = underHundred(tokens);
+  return number === null ? null : String(number);
 }
