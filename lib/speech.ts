@@ -67,8 +67,7 @@ export function parseSpokenExpression(
   for (const transcript of transcripts) {
     const expression =
       language === "zh"
-        ? (parseSymbolExpression(transcript) ??
-          parseChineseExpression(transcript))
+        ? parseChineseExpression(transcript)
         : parseEnglishExpression(transcript);
 
     if (expression) {
@@ -79,86 +78,77 @@ export function parseSpokenExpression(
   return null;
 }
 
-function parseSymbolExpression(transcript: string): string | null {
-  const normalized = transcript
-    .replace(/[＋加]/g, "+")
-    .replace(/[－减]/g, "-")
-    .replace(/[＝]/g, "=")
-    .replace(/等于|等|equals?|equal|is/gi, "=")
-    .replace(/[，,。.\s]/g, "")
-    .replace(/[０-９]/g, (char) =>
-      String.fromCharCode(char.charCodeAt(0) - 0xff10 + 48),
-    );
-  const match = normalized.match(/^(\d+)([+-])(\d+)=(\d+)$/);
-
-  return match ? normalized : null;
+// Formatting must also work for incomplete interim captions. Keep the original
+// recognition transcript in state; only replace known equality words for display.
+export function formatSpeechCaption(transcript: string): string {
+  return transcript.replace(/等于|等於/g, "=");
 }
 
 function parseChineseExpression(transcript: string): string | null {
-  const compact = transcript.replace(/[，,。.\s]/g, "");
-  const match = compact.match(
-    /^([零〇一二两三四五六七八九十百\d]+)(加|减)([零〇一二两三四五六七八九十百\d]+)(?:等于|等)([零〇一二两三四五六七八九十百\d]+)$/,
+  const compact = transcript
+    .replace(/\b(?:equals?|is)\b/gi, "=")
+    .replace(/\s+/g, "");
+  const normalized = formatSpeechCaption(compact)
+    .replace(/[０-９]/g, (char) =>
+      String.fromCharCode(char.charCodeAt(0) - 0xff10 + 48),
+    )
+    .replace(/加上|加/g, "+")
+    .replace(/减去|減去|减|減/g, "-")
+    .replace(/[＋]/g, "+")
+    .replace(/[－−]/g, "-")
+    .replace(/[＝]|等/g, "=")
+    .trim()
+    .replace(/[。.!！?？]$/, "")
+    .replace(/\s+/g, "");
+  // Anchor the whole equation: never delete unknown text or internal punctuation.
+  const match = normalized.match(
+    /^([零〇一二两兩三四五六七八九十百\d]+)([+-])([零〇一二两兩三四五六七八九十百\d]+)=([零〇一二两兩三四五六七八九十百\d]+)$/,
   );
-
-  if (!match) {
-    return null;
-  }
-
+  if (!match) return null;
   const [, left, operator, right, result] = match;
   const parts = [left, right, result].map(parseChineseNumber);
-
-  if (parts.some((part) => part === null)) {
-    return null;
-  }
-
-  return `${parts[0]}${operator === "加" ? "+" : "-"}${parts[1]}=${parts[2]}`;
+  if (parts.some((part) => part === null)) return null;
+  return `${parts[0]}${operator}${parts[1]}=${parts[2]}`;
 }
 
-function parseChineseNumber(value: string): number | null {
-  if (/^\d+$/.test(value)) {
-    return Number(value);
-  }
-
-  const digits: Record<string, number> = {
-    零: 0,
-    〇: 0,
-    一: 1,
-    二: 2,
-    两: 2,
-    三: 3,
-    四: 4,
-    五: 5,
-    六: 6,
-    七: 7,
-    八: 8,
-    九: 9,
+function parseChineseNumber(value: string): string | null {
+  const digits: Record<string, string> = {
+    零: "0",
+    〇: "0",
+    一: "1",
+    二: "2",
+    两: "2",
+    兩: "2",
+    三: "3",
+    四: "4",
+    五: "5",
+    六: "6",
+    七: "7",
+    八: "8",
+    九: "9",
   };
-
-  if ([...value].every((char) => char in digits)) {
-    return Number([...value].map((char) => digits[char]).join(""));
+  const normalized = value.replace(
+    /[零〇一二两兩三四五六七八九]/g,
+    (char) => digits[char],
+  );
+  // Digit-by-digit speech can mix scripts. Preserve leading zeros/slot count
+  // instead of silently changing the equation presented to the game validator.
+  if (/^\d+$/.test(normalized)) {
+    return Number.isSafeInteger(Number(normalized)) ? normalized : null;
   }
-
-  if (value === "十") {
-    return 10;
-  }
-
-  const hundredParts = value.split("百");
-  if (hundredParts.length === 2) {
-    const hundreds = hundredParts[0] ? digits[hundredParts[0]] : 1;
-    const rest = hundredParts[1] ? parseChineseNumber(hundredParts[1]) : 0;
-    return hundreds === undefined || rest === null
-      ? null
-      : hundreds * 100 + rest;
-  }
-
-  const tenParts = value.split("十");
-  if (tenParts.length === 2) {
-    const tens = tenParts[0] ? digits[tenParts[0]] : 1;
-    const ones = tenParts[1] ? digits[tenParts[1]] : 0;
-    return tens === undefined || ones === undefined ? null : tens * 10 + ones;
-  }
-
-  return null;
+  const tens = normalized.match(/^([1-9]?)十([1-9]?)$/);
+  if (tens) return String(Number(tens[1] || 1) * 10 + Number(tens[2] || 0));
+  const hundreds = normalized.match(/^([1-9])百(.*)$/);
+  if (!hundreds) return null;
+  const rest = hundreds[2];
+  if (!rest) return String(Number(hundreds[1]) * 100);
+  // Require a complete unambiguous remainder: 一百二 is not silently 102.
+  const remainder = /^(?:[1-9]十[1-9]?|[1-9]\d|0[1-9])$/.test(rest)
+    ? parseChineseNumber(rest)
+    : null;
+  return remainder === null
+    ? null
+    : String(Number(hundreds[1]) * 100 + Number(remainder));
 }
 
 // Only normalize known arithmetic tokens. Never discard unknown speech or

@@ -79,6 +79,7 @@ import { getSuccessFeedback } from "@/lib/success";
 import {
   getSpeechRecognitionConstructor,
   parseSpokenExpression,
+  formatSpeechCaption,
 } from "@/lib/speech";
 
 import {
@@ -1282,8 +1283,8 @@ export function MatchstickGame() {
                               ? text.voice
                               : text.voiceCaptionHeard}
                         </strong>
-                        <span title={voiceCaption.text}>
-                          {voiceCaption.text ||
+                        <span title={formatSpeechCaption(voiceCaption.text)}>
+                          {formatSpeechCaption(voiceCaption.text) ||
                             (listening
                               ? text.voicePhases[voicePhase]
                               : text.voiceCaptionEmpty)}

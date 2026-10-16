@@ -1312,3 +1312,28 @@ test("opt-in event metadata distinguishes stale callbacks and never stores spoke
   g.act(() => g.recognitions[1].end());
   assert.deepEqual(Array.from(panel().entries), []);
 });
+
+test("Chinese mixed speech is judged legally and equality captions format interim and final text", () => {
+  const g = mount();
+  g.act(() => g.byType("GameSettings").props.onLanguageChange("zh"));
+  g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+  const recognition = g.recognitions[0];
+  const captionText = () => {
+    const caption = g
+      .nodes()
+      .find((node) => node.props?.className === "voice-caption");
+    const span = caption.props.children.find((node) => node.type === "span");
+    assert.equal(span.props.title, span.props.children);
+    return span.props.children;
+  };
+  g.act(() => recognition.result("7减五等于"));
+  assert.equal(captionText(), "7减五=");
+  assert.equal(g.byType("GameControls").props.solved, false);
+  // Mathematically true, but not a legal answer for the current 7-5=3 puzzle.
+  g.act(() => recognition.result("7减四等于3", true));
+  assert.equal(captionText(), "7减四=3");
+  assert.equal(g.byType("GameControls").props.solved, false);
+  g.act(() => recognition.result("7-五等於2", true));
+  assert.equal(captionText(), "7-五=2");
+  assert.equal(g.byType("GameControls").props.solved, true);
+});

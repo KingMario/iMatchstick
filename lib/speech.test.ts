@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { parseSpokenExpression } from "./speech";
+import { formatSpeechCaption, parseSpokenExpression } from "./speech";
 import { createPuzzleFromExpression, isAnswer } from "./matchstick";
 
 describe("speech expression parsing", () => {
@@ -196,5 +196,92 @@ describe("parsed speech uses the existing puzzle answer validator", () => {
         accepted,
       );
     });
+  }
+});
+
+describe("mixed Chinese speech normalization", () => {
+  for (const [speech, expected] of [
+    ["7-四=3", "7-4=3"],
+    ["7-四 equals 3", "7-4=3"],
+    ["七 减 四 等 于 三", "7-4=3"],
+    ["7 加 上 两 等 于 九", "7+2=9"],
+    ["7-4 is 3", "7-4=3"],
+    ["七－４＝三", "7-4=3"],
+    ["7减去四等于3", "7-4=3"],
+    ["七減去4等於三。", "7-4=3"],
+    ["两加上3等于五", "2+3=5"],
+    ["兩+三=5", "2+3=5"],
+    ["十六-9=七", "16-9=7"],
+    ["7十9减三十=四9", "79-30=49"],
+    ["1百二十三-四5=七十八", "123-45=78"],
+    ["一百零二减2=100", "102-2=100"],
+    ["1百23-23=一百", "123-23=100"],
+    ["零7+一=08", "07+1=08"],
+    ["0七+1=零八", "07+1=08"],
+    ["7 − 四 = 3！", "7-4=3"],
+  ]) {
+    it(`normalizes ${speech}`, () =>
+      assert.equal(parseSpokenExpression([speech], "zh"), expected));
+  }
+  for (const speech of [
+    "7.5-四=3",
+    "7,5-四=3",
+    "七。五-四=3",
+    "7-四=不是3",
+    "7-四=3或4",
+    "7-四=3abc",
+    "7-四==3",
+    "7--四=3",
+    "7乘四=28",
+    "7/1-四=3",
+    "零十+一=一",
+    "一百百+一=一",
+    "一百二+一=一",
+    "一百十+一=一",
+    "二十十+一=一",
+    "十零+一=一",
+    "一百零零二+一=一",
+    "一百零二十+一=一",
+    "9007199254740993+零=1",
+    "7-四=3;alert(1)",
+  ]) {
+    it(`rejects malformed ${speech}`, () =>
+      assert.equal(parseSpokenExpression([speech], "zh"), null));
+  }
+  it("keeps checking alternate transcripts", () => {
+    assert.equal(parseSpokenExpression(["不是答案", "7-四=3"], "zh"), "7-4=3");
+  });
+  for (const [speech, accepted] of [
+    ["7-四=3", true],
+    ["七减去4等于三", true],
+    ["7-五=2", false],
+    ["七减四等于二", false],
+    ["零七减四等于三", false],
+  ] as const) {
+    it(`judges ${speech} using legal one-match puzzle answers`, () => {
+      const puzzle = createPuzzleFromExpression("1+4=3");
+      assert.ok(puzzle);
+      const expression = parseSpokenExpression([speech], "zh");
+      assert.equal(
+        expression !== null && isAnswer(expression, puzzle.answers),
+        accepted,
+      );
+    });
+  }
+});
+
+describe("speech caption presentation", () => {
+  for (const [raw, expected] of [
+    ["7减四等于3", "7减四=3"],
+    ["七減四等於三", "七減四=三"],
+    ["7减四等于", "7减四="],
+    ["7减", "7减"],
+    ["等", "等"],
+    ["7-四=3", "7-四=3"],
+    ["", ""],
+    ["six equals five", "six equals five"],
+  ]) {
+    it(`formats complete or interim caption ${raw}`, () =>
+      assert.equal(formatSpeechCaption(raw), expected));
   }
 });
