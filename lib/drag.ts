@@ -96,6 +96,11 @@ export function getPointerDragMetrics(
     ...metrics,
     ...(touchMagnifier ? { offsetX: 0, offsetY: 0 } : {}),
     touchMagnifier,
+    // SVG uses xMidYMid meet: account for either constrained dimension.
+    stickLength: Math.min(
+      orientation === "horizontal" ? rect.width : rect.height,
+      ((orientation === "horizontal" ? rect.height : rect.width) * 240) / 68,
+    ),
   };
 }
 

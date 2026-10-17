@@ -30,6 +30,12 @@ function mount(id, overrides = {}) {
   const cleanups = [];
   const elements = new Map();
   const completed = [];
+  let randomCalls = 0;
+  const math = Object.create(Math);
+  math.random = () => {
+    randomCalls++;
+    return overrides.random ? overrides.random() : 0.75;
+  };
   let next = 0;
   let overview = 0;
   const windowListeners = new Map();
@@ -257,6 +263,7 @@ function mount(id, overrides = {}) {
       ).outputText,
       {
         exports,
+        Math: math,
         document,
         window: eventTarget(windowListeners),
         require(name) {
@@ -266,6 +273,8 @@ function mount(id, overrides = {}) {
           if (name === "react-dom") return { createPortal: (child) => child };
           if (name === "../../lib/academy") return academy;
           if (name === "../../lib/matchstick") return matchstick;
+          if (name === "../../lib/matchstickAppearance")
+            return load("lib/matchstickAppearance.ts");
           if (name === "../../lib/drag") return load("lib/drag.ts");
           if (
             name === "../../lib/matchstickSlots" ||
@@ -358,6 +367,7 @@ function mount(id, overrides = {}) {
   return {
     lesson,
     completed,
+    randomCalls: () => randomCalls,
     nodes,
     byId,
     segment,
@@ -1554,4 +1564,159 @@ test("Academy locked sources and solved destinations never hide their artwork", 
   assertNoHiddenArtwork(h);
   assert.ok(!h.lens());
   assert.equal(solved.element.captures.size, 0);
+});
+
+function previewReversed(h) {
+  if (h.lens()) return h.lens().props.stick.reversed;
+  const artwork = matchArtwork(h.ghost());
+  assert.equal(artwork.length, 1, "helper carries one matchstick");
+  return artwork[0].props["data-reversed"];
+}
+function placedReversed(h, to) {
+  const artwork = matchArtwork(
+    to ? h.segment(to) : h.byId("academy-reservoir"),
+  );
+  assert.equal(artwork.length, 1, "placed matchstick artwork exists");
+  return artwork[0].props["data-reversed"];
+}
+
+for (const phonePortrait of [false, true]) {
+  for (const isPhone of [false, true]) {
+    for (const id of ["academy-2-1", "academy-2-2", "academy-3-1"]) {
+      test(`Academy ${id} retains same-axis head without randomness (${phonePortrait}, ${isPhone})`, () => {
+        const h = mount(id, { phonePortrait, isPhone });
+        const { from, to } = academy.getAcademySolution(h.lesson);
+        const source = currentSource(h);
+        const destination = to ? h.segment(to) : h.byId("academy-reservoir");
+        const logicalHorizontal =
+          !from || source.props.className.split(" ").includes("horizontal");
+        h.pointer(source, "Down", ...center(source));
+        h.pointer(source, "Move", ...center(destination));
+        assert.equal(previewReversed(h), phonePortrait && logicalHorizontal);
+        assert.equal(h.randomCalls(), 0, "same-axis preview never rolls");
+        h.pointer(source, "Up", ...center(destination));
+        assert.ok(h.success());
+        assert.equal(placedReversed(h, to), false);
+        assert.equal(h.randomCalls(), 0, "same-axis drop never rolls");
+      });
+    }
+    for (const id of [
+      "academy-2-3",
+      "academy-2-4",
+      "academy-3-4",
+      "academy-4-1",
+    ]) {
+      for (const random of [0.25, 0.75]) {
+        test(`Academy ${id} quarter-turn preview, reentry, drop and replay retain one choice (${phonePortrait}, ${isPhone}, ${random})`, () => {
+          const h = mount(id, { phonePortrait, isPhone, random: () => random });
+          const { to } = academy.getAcademySolution(h.lesson);
+          const source = currentSource(h);
+          h.pointer(source, "Down", ...center(source));
+          const destination = to ? h.segment(to) : h.byId("academy-reservoir");
+          const logicalHorizontal =
+            !to ||
+            destination.props.className.split(" ").includes("horizontal");
+          const expectedLogical = random < 0.5;
+          const expectedScreen =
+            expectedLogical !== (phonePortrait && logicalHorizontal);
+          h.pointer(source, "Move", ...center(destination));
+          assert.equal(previewReversed(h), expectedScreen);
+          assert.equal(
+            h.randomCalls(),
+            1,
+            "first axis-switch candidate chooses once",
+          );
+          h.pointer(source, "Move", ...center(destination));
+          h.pointer(source, "Move", 1400, 900);
+          assert.equal(
+            previewReversed(h),
+            expectedScreen,
+            "free dragging keeps the preview head",
+          );
+          h.pointer(source, "Move", ...center(destination));
+          assert.equal(
+            previewReversed(h),
+            expectedScreen,
+            "candidate reentry keeps the choice",
+          );
+          assert.equal(h.randomCalls(), 1, "moves and reentry never reroll");
+          h.pointer(source, "Up", ...center(destination));
+          assert.ok(h.success());
+          assert.equal(
+            placedReversed(h, to),
+            expectedLogical,
+            "drop persists preview direction in board coordinates",
+          );
+          assert.equal(h.randomCalls(), 1, "drop never rerolls");
+          h.click(h.byId("academy-reset"));
+          assert.equal(
+            placedReversed(h, academy.getAcademySolution(h.lesson).from),
+            false,
+            "replay restores initial head direction",
+          );
+          const replaySource = currentSource(h);
+          h.pointer(replaySource, "Down", ...center(replaySource));
+          const replayDestination = to
+            ? h.segment(to)
+            : h.byId("academy-reservoir");
+          h.pointer(replaySource, "Move", ...center(replayDestination));
+          assert.equal(h.randomCalls(), 2, "a new drag chooses independently");
+          h.pointer(replaySource, "Cancel", ...center(replayDestination));
+        });
+      }
+    }
+  }
+}
+
+for (const id of [
+  "academy-2-1",
+  "academy-2-2",
+  "academy-2-3",
+  "academy-2-4",
+  "academy-3-1",
+  "academy-3-4",
+]) {
+  for (const phonePortrait of [false, true]) {
+    test(`Academy ${id} click placement uses logical axes and saves the head (${phonePortrait})`, () => {
+      const h = mount(id, { phonePortrait, random: () => 0.25 });
+      const { to } = academy.getAcademySolution(h.lesson);
+      const changesAxis = [
+        "academy-2-3",
+        "academy-2-4",
+        "academy-3-4",
+      ].includes(id);
+      clickSolution(h);
+      assert.ok(h.success());
+      assert.equal(placedReversed(h, to), changesAxis);
+      assert.equal(h.randomCalls(), changesAxis ? 1 : 0);
+    });
+  }
+}
+
+test("Academy caches separate axis-switch candidates and commits the previewed target", () => {
+  const choices = [0.25, 0.75];
+  const h = mount("academy-2-3", {
+    isPhone: true,
+    random: () => choices.shift(),
+  });
+  const source = currentSource(h);
+  h.pointer(source, "Down", ...center(source));
+  const wrong = h.segment({ position: 0, segment: 2 });
+  const right = h.segment(academy.getAcademySolution(h.lesson).to);
+  h.pointer(source, "Move", ...center(wrong));
+  assert.equal(previewReversed(h), true);
+  h.pointer(source, "Move", ...center(right));
+  assert.equal(previewReversed(h), false);
+  h.pointer(source, "Move", ...center(wrong));
+  assert.equal(previewReversed(h), true);
+  h.pointer(source, "Move", ...center(right));
+  assert.equal(previewReversed(h), false);
+  assert.equal(h.randomCalls(), 2);
+  h.pointer(source, "Up", ...center(right));
+  assert.ok(h.success());
+  assert.equal(
+    placedReversed(h, academy.getAcademySolution(h.lesson).to),
+    false,
+  );
+  assert.equal(h.randomCalls(), 2);
 });

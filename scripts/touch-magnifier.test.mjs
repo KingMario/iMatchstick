@@ -254,8 +254,8 @@ for (const portrait of [false, true]) {
     lens.move(point);
     assert.deepEqual(lens.placement, initial);
     assert.deepEqual(lens.matrix.slice(0, 4), matrix.slice(0, 4));
-    assert.equal(lens.matrix[4] - matrix[4], (180 - point.x) * 1.6);
-    assert.equal(lens.matrix[5] - matrix[5], (210 - point.y) * 1.6);
+    assert.equal(lens.matrix[4] - matrix[4], (180 - point.x) * 1.2);
+    assert.equal(lens.matrix[5] - matrix[5], (210 - point.y) * 1.2);
     assert.equal(lens.anchorReads, 1);
     lens.unmount();
   });
@@ -271,8 +271,8 @@ for (const portrait of [false, true]) {
     lens.snap({ x: point.x + 10, y: point.y - 20 });
     assert.deepEqual(lens.placement, initial);
     assert.deepEqual(lens.matrix, matrix);
-    assert.equal(lens.stick.left, 76);
-    assert.equal(lens.stick.top, 28);
+    assert.equal(lens.stick.left, 72);
+    assert.equal(lens.stick.top, 36);
     lens.unmount();
   });
 

@@ -271,3 +271,14 @@ test("tiny viewports retain an in-bounds lens at one and ten pixels", () => {
     }
   }
 });
+
+test("reduced zoom shows a wider neighborhood without changing lens diameter", () => {
+  assert.equal(magnifierZoom, 1.2);
+  const fieldOfView = 120 / magnifierZoom;
+  assert.equal(fieldOfView, 100);
+  assert.ok(fieldOfView > 120 / 1.6);
+  assert.deepEqual(getMagnifierLocalPoint({ x: 40, y: 0 }, { x: 0, y: 0 }), {
+    x: 108,
+    y: 60,
+  });
+});

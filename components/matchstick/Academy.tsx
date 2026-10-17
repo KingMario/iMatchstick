@@ -21,8 +21,14 @@ import {
   moveDragToPointer,
   releaseDragPointerCapture,
   type DragHand,
+  type SnapTarget,
 } from "../../lib/drag";
 import { type SelectedSegment } from "../../lib/matchstick";
+import {
+  chooseStickDirection,
+  getDragStickDirection,
+} from "../../lib/matchstickAppearance";
+import { getSegmentOrientation } from "../../lib/matchstickSlots";
 import { MatchstickChar } from "./MatchstickChar";
 import { MatchstickArt } from "./MatchstickArt";
 import { TouchMagnifier } from "./TouchMagnifier";
@@ -52,7 +58,12 @@ type Drag = {
   offsetX: number;
   offsetY: number;
   orientation: "horizontal" | "vertical";
+  originOrientation: "horizontal" | "vertical";
+  sourceReversed: boolean;
+  reversed: boolean;
+  directionChoices: Map<string, boolean>;
   helperSize: number;
+  stickLength: number;
   active: boolean;
   element: HTMLButtonElement;
   pointerId: number;
@@ -267,6 +278,10 @@ export function AcademyLessonView({
 }) {
   const text = academyCopy[language];
   const [cards, setCards] = useState(lesson.initial);
+  const [directions, setDirections] = useState<boolean[][]>(() =>
+    lesson.initial.map(() => Array(7).fill(false)),
+  );
+  const [reservoirReversed, setReservoirReversed] = useState(false);
   const [selected, setSelected] = useState<Selection>(null);
   const [solved, setSolved] = useState(false);
   const [choice, setChoice] = useState<string | null>(null);
@@ -364,6 +379,8 @@ export function AcademyLessonView({
     clearDrag();
     suppressClick.current = false;
     setCards(lesson.initial);
+    setDirections(lesson.initial.map(() => Array(7).fill(false)));
+    setReservoirReversed(false);
     setSelected(null);
     setSolved(false);
     setChoice(null);
@@ -371,11 +388,34 @@ export function AcademyLessonView({
     setDemonstrate(false);
     setShowHint(false);
   }
-  function apply(movement: AcademyMovement) {
+  function apply(movement: AcademyMovement, reversed?: boolean) {
     clearDrag();
     const result = validateAcademyMove(lesson, movement);
     setSelected(null);
     if (result.reason === "success") {
+      const { from, to } = movement;
+      const placedReversed =
+        reversed ??
+        chooseStickDirection(
+          from ? Boolean(directions[from.position]?.[from.segment]) : false,
+          from
+            ? getSegmentOrientation(cards[from.position], from.segment)
+            : "horizontal",
+          to
+            ? getSegmentOrientation(cards[to.position], to.segment)
+            : "horizontal",
+        );
+      if (to)
+        setDirections((previous) =>
+          previous.map((segments, position) =>
+            position === to.position
+              ? segments.map((direction, segment) =>
+                  segment === to.segment ? placedReversed : direction,
+                )
+              : segments,
+          ),
+        );
+      else setReservoirReversed(placedReversed);
       setCards(result.cards);
       setSolved(true);
       setFeedback(null);
@@ -440,8 +480,15 @@ export function AcademyLessonView({
       orientation,
       { phonePortrait, dragHand, pointerType: event.pointerType, isPhone },
     );
+    const sourceReversed = from
+      ? Boolean(directions[from.position]?.[from.segment])
+      : false;
     const pending: Drag = {
       from,
+      sourceReversed,
+      reversed: sourceReversed,
+      originOrientation: orientation,
+      directionChoices: new Map(),
       pointerX: event.clientX,
       pointerY: event.clientY,
       snapped: false,
@@ -464,7 +511,7 @@ export function AcademyLessonView({
     event: Pick<PointerEvent<HTMLButtonElement>, "clientX" | "clientY">,
     current: Drag,
   ) {
-    return resolveDragTarget(event, current, {
+    const resolved = resolveDragTarget(event, current, {
       preferPointerHit: true,
       isAllowed: (element) =>
         isAcademyMoveAllowed(lesson, {
@@ -475,6 +522,33 @@ export function AcademyLessonView({
           },
         }),
     });
+    const reservoir = reservoirRef.current;
+    const tray = reservoir?.getBoundingClientRect();
+    const inside = (x: number, y: number) =>
+      tray &&
+      x >= tray.left - 8 &&
+      x <= tray.right + 8 &&
+      y >= tray.top - 8 &&
+      y <= tray.bottom + 8;
+    if (
+      lesson.mode === "remove" &&
+      reservoir &&
+      tray &&
+      (inside(resolved.point.x, resolved.point.y) ||
+        inside(event.clientX, event.clientY))
+    ) {
+      // The empty matchbox is a stable candidate too: preview its quarter-turn
+      // before committing a removal, just as for a numbered board slot.
+      const target: SnapTarget = {
+        element: reservoir,
+        x: tray.left + tray.width / 2,
+        y: tray.top + tray.height / 2,
+        distance: 0,
+        orientation: phonePortrait ? "vertical" : "horizontal",
+      };
+      return { ...resolved, target };
+    }
+    return resolved;
   }
 
   function pointerMove(event: PointerEvent<HTMLButtonElement>) {
@@ -505,6 +579,7 @@ export function AcademyLessonView({
       pointerX: event.clientX,
       pointerY: event.clientY,
       snapped: Boolean(target),
+      reversed: getDragStickDirection(current, target),
       x: target?.x ?? point.x,
       y: target?.y ?? point.y,
       orientation:
@@ -523,27 +598,23 @@ export function AcademyLessonView({
       return;
     }
     suppressClick.current = true;
-    const { target, point } = findTarget(event, current);
-    const tray = reservoirRef.current?.getBoundingClientRect();
-    const inside = (x: number, y: number) =>
-      tray &&
-      x >= tray.left - 8 &&
-      x <= tray.right + 8 &&
-      y >= tray.top - 8 &&
-      y <= tray.bottom + 8;
-    if (
-      lesson.mode === "remove" &&
-      (inside(point.x, point.y) || inside(event.clientX, event.clientY))
-    )
-      apply({ from: current.from, to: null });
+    const { target } = findTarget(event, current);
+    if (target?.element === reservoirRef.current)
+      apply(
+        { from: current.from, to: null },
+        getDragStickDirection(current, target),
+      );
     else if (target)
-      apply({
-        from: current.from,
-        to: {
-          position: Number(target.element.dataset.position),
-          segment: Number(target.element.dataset.segment),
+      apply(
+        {
+          from: current.from,
+          to: {
+            position: Number(target.element.dataset.position),
+            segment: Number(target.element.dataset.segment),
+          },
         },
-      });
+        getDragStickDirection(current, target),
+      );
     else {
       clearDrag();
       setSelected(null);
@@ -693,7 +764,7 @@ export function AcademyLessonView({
                   char={char}
                   position={position}
                   rotatedClockwise={phonePortrait}
-                  directions={Array(7).fill(false)}
+                  directions={directions[position]}
                   selected={segmentSelection}
                   hiddenSource={drag?.touchMagnifier ? drag.from : null}
                   selectionActive={selectionActive}
@@ -771,6 +842,7 @@ export function AcademyLessonView({
               (lesson.mode === "remove" && solved) ? (
                 <MatchstickArt
                   orientation="horizontal"
+                  reversed={reservoirReversed}
                   sourceHidden={
                     interactive &&
                     lesson.mode === "add" &&
@@ -866,8 +938,11 @@ export function AcademyLessonView({
             x: drag.x,
             y: drag.y,
             orientation: drag.orientation,
+            length: drag.stickLength,
             snapped: drag.snapped,
-            reversed: phonePortrait && drag.orientation === "vertical",
+            reversed:
+              drag.reversed !==
+              (phonePortrait && drag.orientation === "vertical"),
           }}
         />
       )}
@@ -890,7 +965,13 @@ export function AcademyLessonView({
                   : drag.helperSize * 2.5,
             }}
           >
-            <MatchstickArt orientation={drag.orientation} />
+            <MatchstickArt
+              orientation={drag.orientation}
+              reversed={
+                drag.reversed !==
+                (phonePortrait && drag.orientation === "vertical")
+              }
+            />
           </div>,
           document.body,
         )}

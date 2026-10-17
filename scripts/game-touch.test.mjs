@@ -20,6 +20,9 @@ function mount({
   delayedAbort = false,
   soundEnabled = false,
   silentStart = false,
+  sourceReversed,
+  expression = "7-5=3",
+  directionRandom,
 } = {}) {
   const state = [],
     effects = [],
@@ -108,7 +111,7 @@ function mount({
       }
     },
     location: {
-      search: "?puzzle=7-5%3D3",
+      search: `?puzzle=${encodeURIComponent(expression)}`,
       href: "https://example.test/?puzzle=7-5%3D3",
     },
     history: { replaceState() {} },
@@ -297,6 +300,39 @@ function mount({
           const resolved = name.startsWith("@/")
             ? name.slice(2)
             : posix.normalize(posix.join(posix.dirname(file), name));
+          if (
+            resolved === "lib/matchstickAppearance" &&
+            (sourceReversed !== undefined || directionRandom)
+          ) {
+            const appearance = require("../.test-out/lib/matchstickAppearance.js");
+            return {
+              ...appearance,
+              chooseStickDirection: (source, from, to) =>
+                appearance.chooseStickDirection(
+                  source,
+                  from,
+                  to,
+                  directionRandom,
+                ),
+              getDragStickDirection: (current, target) =>
+                appearance.getDragStickDirection(
+                  current,
+                  target,
+                  directionRandom,
+                ),
+              createStickDirections(length) {
+                const directions = appearance.createStickDirections(
+                  length,
+                  () => 0.9,
+                );
+                if (sourceReversed !== undefined) {
+                  directions[4][3] = sourceReversed;
+                  directions[4][5] = !sourceReversed;
+                }
+                return directions;
+              },
+            };
+          }
           if (resolved === "lib/clientStorage")
             return {
               readJson: (key, fallback) =>
@@ -1337,3 +1373,55 @@ test("Chinese mixed speech is judged legally and equality captions format interi
   assert.equal(captionText(), "7-五=2");
   assert.equal(g.byType("GameControls").props.solved, true);
 });
+
+for (const portrait of [false, true])
+  for (const reversed of [false, true])
+    for (const input of ["drag", "tap"])
+      test(`placed match keeps the carried head direction: ${portrait}/${reversed}/${input}`, () => {
+        const g = mount({ portrait, sourceReversed: reversed });
+        const art = (node) => node.props.children;
+        const source = g.segment(4, 3);
+        assert.equal(art(source).props["data-reversed"], reversed);
+        if (input === "drag") {
+          const { source, point } = drag(g);
+          assert.equal(g.lens().props.stick.reversed, reversed);
+          assert.equal(g.lens().props.stick.length, (12 * 240) / 68);
+          g.pointer(source, "Up", point);
+        } else {
+          g.click(source);
+          g.click(g.segment(4, 5));
+        }
+        assert.equal(g.byType("GameControls").props.solved, true);
+        assert.equal(art(g.segment(4, 5)).props["data-reversed"], reversed);
+        g.act(() => g.byType("GameControls").props.onUndo());
+        assert.equal(art(g.segment(4, 3)).props["data-reversed"], reversed);
+      });
+
+for (const portrait of [false, true])
+  for (const random of [0, 0.99])
+    test(`random quarter turn is previewed once and retained on release: ${portrait}/${random}`, () => {
+      let calls = 0;
+      const g = mount({
+        portrait,
+        expression: "0+1=7",
+        directionRandom: () => {
+          calls++;
+          return random;
+        },
+      });
+      const source = g.segment(0, 2);
+      g.pointer(source, "Down", g.center(source));
+      const target = g.segment(0, 6);
+      const point = g.center(target);
+      g.pointer(source, "Move", point);
+      const preview = g.lens().props.stick.reversed;
+      assert.equal(preview, random < 0.5 !== portrait);
+      g.pointer(source, "Move", { x: 2400, y: 2000 });
+      g.pointer(source, "Move", point);
+      assert.equal(g.lens().props.stick.reversed, preview);
+      g.pointer(source, "Up", point);
+      assert.equal(calls, 1);
+      assert.equal(g.byType("GameControls").props.solved, true);
+      const placed = g.segment(0, 6).props.children;
+      assert.equal(placed.props["data-reversed"], random < 0.5);
+    });

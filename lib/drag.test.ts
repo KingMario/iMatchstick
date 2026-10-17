@@ -280,6 +280,33 @@ it("mouse and non-phone touch retain the prior offset helper", () => {
       phonePortrait: true,
       dragHand: "left",
     });
-    assert.deepEqual(next, { ...old, touchMagnifier: false });
+    assert.deepEqual(next, {
+      ...old,
+      touchMagnifier: false,
+      stickLength: (22 * 240) / 68,
+    });
+  }
+});
+
+it("lens artwork measures the actual SVG meet size in both screen orientations", () => {
+  for (const orientation of ["horizontal", "vertical"] as const) {
+    for (const [length, thickness] of [
+      [80, 22],
+      [40, 20],
+    ]) {
+      const rect = (
+        orientation === "horizontal"
+          ? { width: length, height: thickness }
+          : { width: thickness, height: length }
+      ) as DOMRect;
+      const metrics = getPointerDragMetrics(rect, orientation, {
+        isPhone: true,
+        pointerType: "touch",
+      });
+      assert.equal(
+        metrics.stickLength,
+        Math.min(length, (thickness * 240) / 68),
+      );
+    }
   }
 });

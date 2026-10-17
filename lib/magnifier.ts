@@ -18,7 +18,7 @@ export type MagnifierViewport = {
     left: number;
   }>;
 };
-export const magnifierZoom = 1.6;
+export const magnifierZoom = 1.2;
 export const magnifierDiameter = 120;
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));

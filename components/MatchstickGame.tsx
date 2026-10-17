@@ -1,5 +1,6 @@
 "use client";
 
+import { getSegmentOrientation } from "@/lib/matchstickSlots";
 import { TouchMagnifier } from "./matchstick/TouchMagnifier";
 
 import {
@@ -68,7 +69,12 @@ import {
   type SelectedSegment,
   tryMove,
 } from "@/lib/matchstick";
-import { createStickDirections } from "@/lib/matchstickAppearance";
+import {
+  createStickDirections,
+  transferStickDirection,
+  chooseStickDirection,
+  getDragStickDirection,
+} from "@/lib/matchstickAppearance";
 import {
   normalizePuzzleDifficulty,
   pickPuzzleFromBook,
@@ -125,6 +131,10 @@ type DragState =
       offsetX: number;
       offsetY: number;
       helperSize: number;
+      stickLength: number;
+      sourceReversed: boolean;
+      reversed: boolean;
+      directionChoices: Map<string, boolean>;
       x: number;
       y: number;
       orientation: "horizontal" | "vertical";
@@ -553,7 +563,14 @@ export function MatchstickGame() {
     setMessageKey("selectHint");
   }
 
-  function solve(nextExpression: string) {
+  function solve(
+    nextExpression: string,
+    movement?: {
+      from: SelectedSegment;
+      to: SelectedSegment;
+      reversed: boolean;
+    },
+  ) {
     const recognition = voiceSession.current;
     clearDragReturnTimer();
     cancelVoice();
@@ -576,6 +593,16 @@ export function MatchstickGame() {
       }
     }
 
+    if (movement) {
+      setStickDirections((current) =>
+        transferStickDirection(
+          current,
+          movement.from,
+          movement.to,
+          movement.reversed,
+        ),
+      );
+    }
     setDisplayExpression(nextExpression);
     setSelected(null);
     clearDragGesture();
@@ -806,7 +833,18 @@ export function MatchstickGame() {
       });
 
       if (isAnswer(movedExpression, puzzle.answers)) {
-        solve(movedExpression);
+        solve(movedExpression, {
+          from: selected,
+          to: { position, segment },
+          reversed: chooseStickDirection(
+            Boolean(stickDirections[selected.position]?.[selected.segment]),
+            getSegmentOrientation(
+              displayExpression[selected.position],
+              selected.segment,
+            ),
+            getSegmentOrientation(displayExpression[position], segment),
+          ),
+        });
         return;
       }
 
@@ -909,7 +947,11 @@ export function MatchstickGame() {
       offsetX: helperMetrics.offsetX,
       offsetY: helperMetrics.offsetY,
       helperSize: helperMetrics.helperSize,
+      stickLength: helperMetrics.stickLength,
       orientation,
+      sourceReversed: Boolean(stickDirections[position]?.[segment]),
+      reversed: Boolean(stickDirections[position]?.[segment]),
+      directionChoices: new Map(),
       originOrientation: orientation,
       x: event.clientX,
       y: event.clientY,
@@ -927,6 +969,21 @@ export function MatchstickGame() {
           position: Number(element.dataset.position),
           segment: Number(element.dataset.segment),
         }),
+    };
+  }
+
+  function moveWithDirection(
+    current: NonNullable<DragState>,
+    event: PointerEvent<HTMLButtonElement>,
+  ) {
+    const options = snapOptions(current.from);
+    const next = moveDragToPointer(current, event, false, true, options);
+    return {
+      ...next,
+      reversed: getDragStickDirection(
+        current,
+        resolveDragTarget(event, current, options).target,
+      ),
     };
   }
 
@@ -953,15 +1010,7 @@ export function MatchstickGame() {
       suppressNextClick.current = true;
       setSelected(pending.from);
       setMessageKey("selectedHint");
-      setDragState(
-        moveDragToPointer(
-          pending,
-          event,
-          false,
-          true,
-          snapOptions(pending.from),
-        ),
-      );
+      setDragState(moveWithDirection(pending, event));
       pendingDrag.current = null;
       setPendingPress(null);
       return;
@@ -976,15 +1025,7 @@ export function MatchstickGame() {
     }
 
     suppressNextClick.current = true;
-    setDragState(
-      moveDragToPointer(
-        currentDrag,
-        event,
-        false,
-        true,
-        snapOptions(currentDrag.from),
-      ),
-    );
+    setDragState(moveWithDirection(currentDrag, event));
   }
 
   function handleSegmentPointerUp(event: PointerEvent<HTMLButtonElement>) {
@@ -1006,11 +1047,12 @@ export function MatchstickGame() {
     // Retire the owner before releasing capture. The rest of this handler uses
     // its snapshot, and only a threshold-crossed drag can submit a move.
     clearDragGesture();
-    const target = resolveDragTarget(
+    const snapTarget = resolveDragTarget(
       event,
       currentDrag,
       snapOptions(currentDrag.from),
-    ).target?.element;
+    ).target;
+    const target = snapTarget?.element;
 
     if (!target?.dataset.position || !target.dataset.segment) {
       if (suppressNextClick.current) {
@@ -1030,7 +1072,11 @@ export function MatchstickGame() {
     suppressNextClick.current = true;
 
     if (isAnswer(movedExpression, puzzle.answers)) {
-      solve(movedExpression);
+      solve(movedExpression, {
+        from: currentDrag.from,
+        to,
+        reversed: getDragStickDirection(currentDrag, snapTarget),
+      });
       return;
     }
 
@@ -1421,13 +1467,10 @@ export function MatchstickGame() {
                       x: touchPreview.x,
                       y: touchPreview.y,
                       orientation: touchPreview.orientation,
+                      length: touchPreview.stickLength,
                       snapped: Boolean(touchPreview.snapped),
                       reversed:
-                        Boolean(
-                          stickDirections[touchPreview.from.position]?.[
-                            touchPreview.from.segment
-                          ],
-                        ) !==
+                        touchPreview.reversed !==
                         (phonePortrait &&
                           touchPreview.orientation === "vertical"),
                     }}
@@ -1449,9 +1492,12 @@ export function MatchstickGame() {
                           drag.snapped ? drag.orientation : "horizontal"
                         }
                         reversed={
-                          stickDirections[drag.from.position]?.[
-                            drag.from.segment
-                          ]
+                          (drag.returning
+                            ? drag.sourceReversed
+                            : drag.reversed) !==
+                          (phonePortrait &&
+                            drag.snapped &&
+                            drag.orientation === "vertical")
                         }
                       />
                     </div>,

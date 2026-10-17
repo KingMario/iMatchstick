@@ -5,6 +5,13 @@ const views = [
   { width: 390, height: 844 },
 ];
 type Mode = "game" | "academy";
+async function headDirection(art: ReturnType<Page["locator"]>) {
+  return art.locator(".matchstick-ink").evaluate((element) => {
+    const matrix = (element as SVGGraphicsElement).getScreenCTM()!;
+    const length = Math.hypot(matrix.a, matrix.b);
+    return { x: matrix.a / length, y: matrix.b / length };
+  });
+}
 async function open(page: Page, mode: Mode, hand = "right") {
   await page.addInitScript(
     (dragHand) =>
@@ -58,6 +65,7 @@ for (const viewport of views)
         await open(page, mode, hand);
         const { board, title, source, target } = nodes(page, mode);
         const from = (await source.boundingBox())!;
+        const originalHead = await headDirection(source.locator("svg"));
         const titleBounds = (await title.boundingBox())!;
         const pressedFinger = {
           x: from.x + from.width / 2,
@@ -75,6 +83,18 @@ for (const viewport of views)
             "visibility",
             "hidden",
           );
+          const carriedArt = lens.locator(".touch-magnifier-stick svg");
+          const pressedHead = await headDirection(carriedArt);
+          expect(pressedHead.x).toBeCloseTo(originalHead.x, 6);
+          expect(pressedHead.y).toBeCloseTo(originalHead.y, 6);
+          const carriedBounds = (await carriedArt.boundingBox())!;
+          const sourceLength = Math.min(
+            Math.max(from.width, from.height),
+            (Math.min(from.width, from.height) * 240) / 68,
+          );
+          expect(
+            Math.max(carriedBounds.width, carriedBounds.height),
+          ).toBeCloseTo(sourceLength * 1.2, 1);
           const pressedBounds = (await lens.boundingBox())!;
           // Logical horizontal motion maps to physical Y in the rotated shell.
           const expectedFrame = (finger: { x: number; y: number }) => {
@@ -90,8 +110,14 @@ for (const viewport of views)
               y: Math.max(8, Math.min(centerY - 60, viewport.height - 128)),
             };
           };
-          expect(pressedBounds.x).toBeCloseTo(expectedFrame(pressedFinger).x, 1);
-          expect(pressedBounds.y).toBeCloseTo(expectedFrame(pressedFinger).y, 1);
+          expect(pressedBounds.x).toBeCloseTo(
+            expectedFrame(pressedFinger).x,
+            1,
+          );
+          expect(pressedBounds.y).toBeCloseTo(
+            expectedFrame(pressedFinger).y,
+            1,
+          );
           const scene = lens.locator(".touch-magnifier-scene > *");
           await expect(scene).toHaveCount(1);
           const pressedMatrix = await scene.evaluate((element) =>
@@ -127,11 +153,11 @@ for (const viewport of views)
           );
           expect(matrix.a * matrix.d - matrix.b * matrix.c).toBeGreaterThan(0); // Never mirrored.
           expect(matrix.e - pressedMatrix.e).toBeCloseTo(
-            -(free.x - pressedFinger.x) * 1.6,
+            -(free.x - pressedFinger.x) * 1.2,
             1,
           );
           expect(matrix.f - pressedMatrix.f).toBeCloseTo(
-            -(free.y - pressedFinger.y) * 1.6,
+            -(free.y - pressedFinger.y) * 1.2,
             1,
           );
           for (const edge of [
@@ -181,11 +207,15 @@ for (const viewport of views)
           await expect(
             lens.locator(".touch-magnifier-stick svg"),
           ).toHaveAttribute("viewBox", vertical ? "0 0 68 240" : "0 0 240 68");
+          const snappedHead = await headDirection(carriedArt);
           await cdp.send("Input.dispatchTouchEvent", {
             type: "touchEnd",
             touchPoints: [],
           });
           await expect(lens).toHaveCount(0);
+          const placedHead = await headDirection(target.locator("svg"));
+          expect(placedHead.x).toBeCloseTo(snappedHead.x, 6);
+          expect(placedHead.y).toBeCloseTo(snappedHead.y, 6);
           await expect(page.locator(".drag-ghost")).toHaveCount(0);
           await expect(
             board.locator(".matchstick-art[style*='hidden']"),
