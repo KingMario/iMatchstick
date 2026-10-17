@@ -17,6 +17,7 @@ type MatchstickCharProps = {
   directions: boolean[];
   successDestination?: SelectedSegment | null;
   solved?: boolean;
+  showSuccessCheck?: boolean;
   selected: SelectedSegment | null;
   /** Presentation only: the phone touch lens owns this source's visible artwork. */
   hiddenSource?: SelectedSegment | null;
@@ -51,6 +52,7 @@ export function MatchstickChar({
   directions,
   successDestination,
   solved,
+  showSuccessCheck = solved,
   selected,
   hiddenSource,
   selectionActive,
@@ -76,7 +78,7 @@ export function MatchstickChar({
         <span className="equals-lower">
           <MatchstickArt orientation="horizontal" reversed={directions[1]} />
         </span>
-        {solved ? (
+        {showSuccessCheck ? (
           <i className="equation-success-check" aria-hidden="true">
             ✓
           </i>

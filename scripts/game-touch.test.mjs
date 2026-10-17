@@ -1425,3 +1425,153 @@ for (const portrait of [false, true])
       const placed = g.segment(0, 6).props.children;
       assert.equal(placed.props["data-reversed"], random < 0.5);
     });
+
+function equationCheck(game) {
+  return game
+    .nodes()
+    .find((node) => node.props?.className === "equation-success-check");
+}
+
+function solveSimplePuzzle(game, input = "tap") {
+  if (input === "voice") {
+    game.act(() => game.byType("GameControls").props.onVoiceAnswer());
+    const recognition = game.recognitions.at(-1);
+    game.act(() => recognition.result("7-5=2", true));
+    game.act(() => recognition.end());
+  } else {
+    game.click(game.segment(4, 3));
+    game.click(game.segment(4, 5));
+  }
+}
+
+function repeatCheckTimer(game) {
+  const timer = [...game.timers].find(([, timer]) => timer.ms === 1500);
+  assert.ok(timer, "repeated-answer check has a 1.5-second lifetime");
+  return timer;
+}
+
+for (const viewport of [
+  { phone: false, portrait: false },
+  { phone: true, portrait: false },
+  { phone: true, portrait: true },
+])
+  for (const input of ["tap", "voice"])
+    test(`repeat equation check expires without changing success state: ${JSON.stringify(viewport)}/${input}`, () => {
+      const g = mount(viewport);
+      g.act(() => g.byType("GameSettings").props.onLanguageChange("zh"));
+      solveSimplePuzzle(g, input);
+      g.act(() => g.byType("GameControls").props.onUndo());
+      solveSimplePuzzle(g, input);
+      assert.ok(equationCheck(g));
+      assert.equal(g.byType("AnswerProgress").props.count, 1);
+      assert.equal(g.byType("AnswerProgress").props.celebrate, false);
+      const statusBefore = JSON.stringify(
+        g.nodes().filter((node) => node.props?.role === "status"),
+      );
+      assert.match(statusBefore, /正确，这个答案已找到/);
+      const [id, timer] = repeatCheckTimer(g);
+      g.act(() => {
+        g.timers.delete(id);
+        timer.fn();
+      });
+      assert.equal(equationCheck(g), undefined);
+      assert.equal(g.byType("GameControls").props.solved, true);
+      assert.equal(g.byType("GameControls").props.interactionLocked, true);
+      assert.equal(g.byType("AnswerProgress").props.count, 1);
+      assert.equal(
+        JSON.stringify(
+          g.nodes().filter((node) => node.props?.role === "status"),
+        ),
+        statusBefore,
+        "only the equation check disappears; the correct-answer message stays",
+      );
+      assert.ok(
+        g.segment(4, 5).props.className.includes("success-destination"),
+      );
+    });
+
+test("undo cancels a repeat-check timer and each repeated answer gets a fresh lifetime", () => {
+  const g = mount();
+  solveSimplePuzzle(g);
+  g.act(() => g.byType("GameControls").props.onUndo());
+  solveSimplePuzzle(g);
+  const [firstId, firstTimer] = repeatCheckTimer(g);
+  g.act(() => g.byType("GameControls").props.onUndo());
+  assert.equal(g.timers.has(firstId), false);
+  assert.equal(equationCheck(g), undefined);
+  solveSimplePuzzle(g);
+  const [secondId, secondTimer] = repeatCheckTimer(g);
+  assert.notEqual(secondId, firstId);
+  g.act(firstTimer.fn);
+  assert.ok(
+    equationCheck(g),
+    "a queued stale callback cannot hide a new check",
+  );
+  g.act(() => {
+    g.timers.delete(secondId);
+    secondTimer.fn();
+  });
+  assert.equal(equationCheck(g), undefined);
+  g.act(() => g.byType("GameControls").props.onUndo());
+  solveSimplePuzzle(g);
+  assert.ok(equationCheck(g), "an expired answer can show feedback again");
+  assert.notEqual(repeatCheckTimer(g)[0], secondId);
+});
+
+test("new puzzle cancels repeat-check cleanup before loading and protects later completion", async () => {
+  const g = mount();
+  solveSimplePuzzle(g);
+  g.act(() => g.byType("GameControls").props.onUndo());
+  solveSimplePuzzle(g);
+  const [id, timer] = repeatCheckTimer(g);
+  g.act(() => g.byType("GameControls").props.onNewPuzzle());
+  assert.equal(g.timers.has(id), false, "cancel as soon as loading begins");
+  await Promise.resolve();
+  g.render();
+  assert.equal(equationCheck(g), undefined);
+  solveSimplePuzzle(g);
+  g.act(timer.fn);
+  assert.ok(equationCheck(g), "stale repeat timer leaves new completion alone");
+  assert.ok(g.byType("SuccessConfetti"));
+  assert.equal(g.byType("AnswerProgress").props.celebrate, true);
+  assert.equal(
+    [...g.timers.values()].some((timer) => timer.ms === 1500),
+    false,
+  );
+});
+
+test("new and complete answer feedback do not inherit the repeat-check timer", () => {
+  const g = mount({ expression: "6+4=4" });
+  for (const [answer, kind] of [
+    ["0+4=4", "new"],
+    ["8-4=4", "complete"],
+  ]) {
+    g.act(() => g.byType("GameControls").props.onVoiceAnswer());
+    g.act(() => g.recognitions.at(-1).result(answer, true));
+    assert.ok(equationCheck(g));
+    assert.ok(
+      g
+        .nodes()
+        .some((node) => node.props?.className?.includes(`success-${kind}`)),
+    );
+    assert.equal(
+      [...g.timers.values()].some((timer) => timer.ms === 1500),
+      false,
+    );
+    assert.equal(g.byType("AnswerProgress").props.celebrate, true);
+    g.flushTimers();
+    assert.ok(equationCheck(g), "new/complete animation anchors are retained");
+    if (kind === "complete") assert.ok(g.byType("SuccessConfetti"));
+    g.act(() => g.byType("GameControls").props.onUndo());
+  }
+});
+
+test("unmount clears pending repeat-check timers", () => {
+  const g = mount();
+  solveSimplePuzzle(g);
+  g.act(() => g.byType("GameControls").props.onUndo());
+  solveSimplePuzzle(g);
+  const [id] = repeatCheckTimer(g);
+  g.unmount();
+  assert.equal(g.timers.has(id), false);
+});

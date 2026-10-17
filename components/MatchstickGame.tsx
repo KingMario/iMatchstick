@@ -176,6 +176,9 @@ export function MatchstickGame() {
   const [successFeedback, setSuccessFeedback] = useState<ReturnType<
     typeof getSuccessFeedback
   > | null>(null);
+  // Each solve owns its marker lifetime, including repeats of the same answer.
+  const [expiredRepeatFeedback, setExpiredRepeatFeedback] =
+    useState<typeof successFeedback>(null);
   const [solvedAnswers, setSolvedAnswers] = useState<string[]>([]);
   const [timeLeft, setTimeLeft] = useState(60);
   const [showAnswers, setShowAnswers] = useState(false);
@@ -483,6 +486,18 @@ export function MatchstickGame() {
     const timer = window.setTimeout(() => setVoiceCaption(null), 4000);
     return () => window.clearTimeout(timer);
   }, [listening, voiceCaption]);
+
+  useEffect(() => {
+    if (isLoading || !solved || successFeedback?.kind !== "repeat") return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (active) setExpiredRepeatFeedback(successFeedback);
+    }, 1500);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [isLoading, solved, successFeedback]);
 
   useEffect(() => {
     const onHidden = () => {
@@ -1411,6 +1426,11 @@ export function MatchstickGame() {
                         rotatedClockwise={phonePortrait}
                         directions={stickDirections[position] ?? []}
                         solved={solved}
+                        showSuccessCheck={
+                          solved &&
+                          (successFeedback?.kind !== "repeat" ||
+                            expiredRepeatFeedback !== successFeedback)
+                        }
                         successDestination={
                           solved ? successFeedback?.destination : null
                         }
